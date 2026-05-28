@@ -7,7 +7,7 @@ This folder is the multi-agent LLM hedge-fund framework — the new Alliela prod
 - Runtime: Mac Mini (production), to be exposed externally via Cloudflare tunnel once an HTTP wrapper exists.
 - Origin: `https://github.com/TauricResearch/TradingAgents` (`main` branch).
 - Stack: Python 3.12, LangGraph, multi-provider LLMs (OpenAI / Anthropic / Gemini / xAI / DeepSeek / Qwen / GLM / MiniMax), Docker.
-- Entry: upstream `main.py` (CLI via the `tradingagents` script). Library code under `trading-agents/tradingagents/`. See upstream `README.md` for architecture.
+- Entry: programmatic — import `from tradingagents.graph.trading_graph import TradingAgentsGraph` (a minimal usage example is at `trading-agents/main.py`). The upstream CLI (`cli/` directory + `tradingagents` console script) was **deleted** during vendoring; see "CLI removed" below.
 
 ## Mac Mini deployment
 
@@ -27,15 +27,24 @@ docker compose -p alliela-trading build tradingagents
 ### Smoke test
 
 ```bash
-docker run --rm alliela-trading-tradingagents:latest --help
+docker run --rm alliela-trading-tradingagents:latest
 ```
 
-Should print the `tradingagents` CLI usage.
+Runs the example driver at `trading-agents/main.py` (a one-shot analysis on
+`NVDA`). With an empty `.env` this will fail at the first LLM call — that's
+expected; it confirms the image is built and the framework imports cleanly.
 
-### Run a session (interactive, requires `.env` filled in)
+### Run a one-off analysis (requires `.env` filled in)
 
 ```bash
-docker compose -p alliela-trading run --rm tradingagents
+docker compose -p alliela-trading run --rm tradingagents \
+  python -c "
+from tradingagents.graph.trading_graph import TradingAgentsGraph
+from tradingagents.default_config import DEFAULT_CONFIG
+ta = TradingAgentsGraph(config=DEFAULT_CONFIG)
+_, decision = ta.propagate('AAPL', '2026-05-28')
+print(decision)
+"
 ```
 
 ### Updating from the host
@@ -46,9 +55,31 @@ cd ~/Projects/alliela && git pull
 cd trading-agents && docker compose -p alliela-trading build tradingagents
 ```
 
+## CLI removed
+
+The upstream `cli/` directory and three tests that depended on it
+(`test_api_key_env.py`, `test_crypto_asset_mode.py`,
+`test_ollama_base_url.py`) have been deleted from this vendored copy. The
+plan is to drive the framework via a web API, not a terminal — so the
+Rich/Typer/Questionary interactive layer carries no weight here. Removed
+in detail:
+
+- `cli/` (whole directory)
+- `tests/test_{api_key_env,crypto_asset_mode,ollama_base_url}.py`
+- `[project.scripts]` entry in `pyproject.toml` (the `tradingagents` console script)
+- `rich`, `typer`, `questionary`, `tqdm` from `dependencies` in `pyproject.toml`
+- `cli` from `[tool.setuptools.packages.find]` + the `cli/static/*` package-data line
+- `Dockerfile` `ENTRYPOINT` changed from `tradingagents` to a default `python main.py`
+
+**Upstream-merge implication.** This is vendored code (`git subtree --squash`
+from `TauricResearch/TradingAgents`). A future `git subtree pull` *will*
+reintroduce `cli/` and the three test files. When pulling, expect to
+re-delete them as part of the merge — the rest of the pipeline code lives
+under `tradingagents/` and is unaffected.
+
 ## Not yet wired up
 
-- **HTTP/API wrapper.** Upstream is a CLI; there is no FastAPI shim. Until one exists, "exposed via Cloudflare" is aspirational. The next product step is to add a thin FastAPI service (e.g., `trading-agents/api/`) that wraps the orchestration entry points and listens on a host port (suggest `8002` — `8001` is taken by odl's `odl-graph-api`).
+- **HTTP/API wrapper.** Until a FastAPI shim exists, "exposed via Cloudflare" is aspirational. The next product step is to add a thin FastAPI service (e.g., `trading-agents/api/`) that wraps the orchestration entry points and listens on a host port (suggest `8002` — `8001` is taken by odl's `odl-graph-api`).
 - **Cloudflare tunnel route.** Once the API exists, add an ingress entry in `~/.cloudflared/config.yml` mapping a public hostname (e.g., `api.alliela.com` or similar) to `http://localhost:8002`, then `cloudflared service restart`.
 - **launchd job.** Once the API runs as a daemon, add a `com.alliela.trading.plist` in `~/Library/LaunchAgents/` to autorestart. Use the `com.odl.*` plists as templates.
 

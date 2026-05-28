@@ -25,4 +25,10 @@ WORKDIR /home/appuser/app
 
 COPY --from=builder --chown=appuser:appuser /build .
 
-ENTRYPOINT ["tradingagents"]
+# The upstream CLI was removed when vendored into Alliela. The framework is
+# meant to be imported as a library — build your own driver (FastAPI shim,
+# Celery worker, etc.) and override the default below in a downstream image.
+# As a sanity-check default, runs the example script at trading-agents/main.py:
+#   docker run --rm -it <image>
+ENTRYPOINT ["python"]
+CMD ["main.py"]
