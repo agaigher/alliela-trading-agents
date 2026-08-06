@@ -8,9 +8,22 @@ and portfolio decision, producing an auditable research note at every step.
 See the [whitepaper](https://alliela.com/whitepaper) for the full
 architecture.
 
-**This folder is the open-source part of the Alliela project.** The
+**This is the open-source part of the Alliela project** — published at
+[agaigher/alliela-trading-agents](https://github.com/agaigher/alliela-trading-agents),
+mirrored from the private monorepo where development happens. The
 alliela.com web app and UI are separate, closed-source code and are not
 included.
+
+## Status
+
+The public spec is ahead of the implementation. This codebase currently
+implements the original TradingAgents pipeline shape (analysts → Bull/Bear
+debate → Research Manager → trader → risk debate → Portfolio Manager) plus
+multi-provider LLM and configuration work. The nine-tier architecture on
+alliela.com — idea generation, selection committee, review-and-revise
+loops, pre-mortem, binding risk constraints, funding, execution — is the
+build target, with the site's sample-output documents as the output
+contract.
 
 ## Credit — built on TradingAgents
 
