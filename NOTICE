@@ -1,0 +1,21 @@
+Alliela trading-agents
+Copyright 2026 Allan Gaigher
+
+This directory contains a substantially modified fork of TradingAgents:
+Multi-Agents LLM Financial Trading Framework.
+
+  Original work: Copyright Tauric Research
+  https://github.com/TauricResearch/TradingAgents
+  Licensed under the Apache License, Version 2.0
+
+  Paper: Xiao, Y., Sun, E., Luo, D., & Wang, W. (2024).
+  TradingAgents: Multi-Agents LLM Financial Trading Framework.
+  arXiv:2412.20138.
+
+Major modifications relative to upstream include: an idea-generation tier
+(mandate-driven sourcing desks with a reviewing/compiling head), a selection
+committee (three scoring lenses plus a chair owning the idea brief), analyst
+review-and-revise loops, a pre-mortem stage, an independent risk authority
+signing binding constraints with a portfolio-manager compliance handshake,
+funding (portfolio construction) and execution stages writing to a portfolio
+state, multi-provider LLM client work, and prompt/schema redesign throughout.
