@@ -121,6 +121,10 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # Tool-level configuration (takes precedence over category-level)
     "tool_vendors": {
         # Example: "get_stock_data": "alpha_vantage",  # Override category default
+        # Free-text search defaults to Google News RSS — keyless and built
+        # for arbitrary thematic queries. Set to "yfinance" to use
+        # yfinance's Search endpoint instead.
+        "search_news": "google_news",
     },
     # Benchmark for alpha calculation in the reflection layer.
     # ``benchmark_ticker`` (when set) overrides the suffix map for all

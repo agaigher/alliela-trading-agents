@@ -83,6 +83,26 @@ instead of two fixed LLM instances. Namespaced OpenRouter IDs inherit the
 capability quirks of their bare counterparts (`capabilities.get_capabilities`
 retries with the segment after the last `/`).
 
+## Discovery tools (Alliela addition)
+
+Three tools for the Idea Generation tier, usable before a ticker is
+committed to. Implementations live in new modules
+(`dataflows/yfinance_extra.py`, `dataflows/google_news.py`) rather than the
+vendored yfinance files, registered in `dataflows/interface.py`, wrapped in
+`agents/utils/discovery_tools.py`, and re-exported from `agent_utils`:
+
+- `search_news(query, curr_date, look_back_days, limit)` — free-text
+  theme/sector/event search. Default vendor `google_news` (keyless RSS,
+  set as a `tool_vendors` default because the framework's vendor fallback
+  only fires on rate-limit errors); `yfinance` (`yf.Search`) available via
+  `config["tool_vendors"]["search_news"] = "yfinance"`.
+- `get_ticker_snapshot(ticker)` — validates a candidate resolves and
+  reports the liquidity/coverage screen: exchange, currency, price, market
+  cap, average daily volume + value traded, 52-week range, sector.
+  Unresolvable tickers return an explicit "unverified" notice.
+- `get_earnings_calendar(ticker, curr_date)` — dated catalysts: upcoming +
+  recent earnings dates with EPS estimates (yfinance).
+
 ## Removed from the upstream vendoring
 
 The following upstream files were intentionally deleted from this copy

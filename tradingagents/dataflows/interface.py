@@ -11,6 +11,12 @@ from .y_finance import (
     get_insider_transactions as get_yfinance_insider_transactions,
 )
 from .yfinance_news import get_news_yfinance, get_global_news_yfinance
+from .yfinance_extra import (
+    search_news_yfinance,
+    get_ticker_snapshot_yfinance,
+    get_earnings_calendar_yfinance,
+)
+from .google_news import search_news_google
 from .alpha_vantage import (
     get_stock as get_alpha_vantage_stock,
     get_indicator as get_alpha_vantage_indicator,
@@ -32,7 +38,8 @@ TOOLS_CATEGORIES = {
     "core_stock_apis": {
         "description": "OHLCV stock price data",
         "tools": [
-            "get_stock_data"
+            "get_stock_data",
+            "get_ticker_snapshot",
         ]
     },
     "technical_indicators": {
@@ -47,7 +54,8 @@ TOOLS_CATEGORIES = {
             "get_fundamentals",
             "get_balance_sheet",
             "get_cashflow",
-            "get_income_statement"
+            "get_income_statement",
+            "get_earnings_calendar",
         ]
     },
     "news_data": {
@@ -56,6 +64,7 @@ TOOLS_CATEGORIES = {
             "get_news",
             "get_global_news",
             "get_insider_transactions",
+            "search_news",
         ]
     }
 }
@@ -63,6 +72,7 @@ TOOLS_CATEGORIES = {
 VENDOR_LIST = [
     "yfinance",
     "alpha_vantage",
+    "google_news",
 ]
 
 # Mapping of methods to their vendor-specific implementations
@@ -94,10 +104,22 @@ VENDOR_METHODS = {
         "alpha_vantage": get_alpha_vantage_income_statement,
         "yfinance": get_yfinance_income_statement,
     },
+    # core_stock_apis (Alliela discovery additions)
+    "get_ticker_snapshot": {
+        "yfinance": get_ticker_snapshot_yfinance,
+    },
+    # fundamental_data (Alliela discovery additions)
+    "get_earnings_calendar": {
+        "yfinance": get_earnings_calendar_yfinance,
+    },
     # news_data
     "get_news": {
         "alpha_vantage": get_alpha_vantage_news,
         "yfinance": get_news_yfinance,
+    },
+    "search_news": {
+        "yfinance": search_news_yfinance,
+        "google_news": search_news_google,
     },
     "get_global_news": {
         "yfinance": get_global_news_yfinance,
