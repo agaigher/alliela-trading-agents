@@ -103,6 +103,32 @@ vendored yfinance files, registered in `dataflows/interface.py`, wrapped in
 - `get_earnings_calendar(ticker, curr_date)` — dated catalysts: upcoming +
   recent earnings dates with EPS estimates (yfinance).
 
+## Run telemetry & output archive (requirement)
+
+Binding requirement for the runtime (lands with the `api/` queue worker;
+the product spec is the Run Ledger card in `web/pages/home.py` — see
+`web/CLAUDE.md`): **every LLM call the framework makes must persist the
+complete provider response — nothing summarised, nothing truncated.**
+Per call, keyed by `run_id` + agent key + sequence:
+
+- The full completion text (the node's entire output, not just the slice
+  the pipeline consumes downstream).
+- Every reasoning/thinking block the model exposes, verbatim.
+- Tool calls with their full arguments and tool results.
+- OpenRouter metadata: generation id, requested + resolved model,
+  provider/variant actually served, finish reason, prompt/completion/
+  reasoning token counts (native and normalised), cached-token counts,
+  cost in USD, latency and throughput.
+- Errors and the retry chain (what failed, what was retried, final state).
+- The **raw response JSON** alongside the parsed fields, so nothing
+  OpenRouter adds later is lost retroactively.
+
+Per run, roll up: stage-level and run-level call counts, token totals
+(in/out/reasoning), cost USD, wall-clock duration, outcome, and the list
+of documents produced. This is what feeds the History knowledge store
+and the site's Run Ledger; treat any pipeline change that would drop or
+summarise a node's output as a regression.
+
 ## Removed from the upstream vendoring
 
 The following upstream files were intentionally deleted from this copy
