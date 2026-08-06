@@ -152,14 +152,15 @@ because they don't contribute to "run the framework locally as a library":
 expect to re-delete them as part of the merge. The pipeline code under
 `tradingagents/` is what we actually care about syncing.
 
-## Open issue: missing LICENSE
+## Licensing
 
-The upstream is **Apache 2.0**. The vendored snapshot does not currently
-include a `LICENSE` file — either the original `git subtree add` predated
-its addition upstream, or it was missed. For strict Apache 2.0 redistribution
-compliance we should add a copy of the license text with attribution. Open
-todo; not blocking for local development but should be resolved before this
-repo goes fully public.
+The folder is **Apache 2.0**, inherited from the upstream fork — see
+`LICENSE` (complete Apache-2.0 text) and `NOTICE` (Tauric Research
+attribution, paper citation, and the summary of major modifications).
+Upstream ships no NOTICE file of its own, so ours is the only one. Keep
+`NOTICE`'s modification summary current when the pipeline shape changes
+materially, and never remove either file — they must travel with every
+distribution, including the public mirror.
 
 ## Updating the vendored upstream
 
