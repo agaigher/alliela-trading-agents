@@ -51,6 +51,38 @@ python main.py
 `2024-05-10`. Adjust the ticker/date or import `TradingAgentsGraph`
 elsewhere for your own driver.
 
+## Per-agent model selection (Alliela addition)
+
+`config["agent_models"]` maps an agent key to a model name, overriding that
+agent's tier default (`quick_think_llm` / `deep_think_llm`). Any agent not
+listed keeps its tier default. Most useful with `llm_provider="openrouter"`,
+where one API key (`OPENROUTER_API_KEY`) exposes every major lab's models
+under namespaced IDs:
+
+```python
+config["llm_provider"] = "openrouter"
+config["quick_think_llm"] = "openai/gpt-5.4-mini"
+config["deep_think_llm"] = "openai/gpt-5.4"
+config["agent_models"] = {
+    "market_analyst":    "google/gemini-3-flash",
+    "research_manager":  "anthropic/claude-opus-5",
+    "portfolio_manager": "openai/gpt-5.4",
+}
+```
+
+Valid keys: `market_analyst`, `sentiment_analyst`, `news_analyst`,
+`fundamentals_analyst`, `bull_researcher`, `bear_researcher`,
+`research_manager` (deep), `trader`, `aggressive_analyst`,
+`conservative_analyst`, `neutral_analyst`, `portfolio_manager` (deep),
+`reflector`, `signal_processor`.
+
+Also settable from `.env` as JSON via `TRADINGAGENTS_AGENT_MODELS`.
+Implementation: `TradingAgentsGraph._llm_for(agent_key, tier)` resolves and
+caches one client per distinct model; `GraphSetup` receives the resolver
+instead of two fixed LLM instances. Namespaced OpenRouter IDs inherit the
+capability quirks of their bare counterparts (`capabilities.get_capabilities`
+retries with the segment after the last `/`).
+
 ## Removed from the upstream vendoring
 
 The following upstream files were intentionally deleted from this copy

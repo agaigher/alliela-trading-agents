@@ -1,3 +1,4 @@
+import json
 import os
 
 _TRADINGAGENTS_HOME = os.path.join(os.path.expanduser("~"), ".tradingagents")
@@ -11,6 +12,7 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_LLM_PROVIDER":         "llm_provider",
     "TRADINGAGENTS_DEEP_THINK_LLM":       "deep_think_llm",
     "TRADINGAGENTS_QUICK_THINK_LLM":      "quick_think_llm",
+    "TRADINGAGENTS_AGENT_MODELS":         "agent_models",
     "TRADINGAGENTS_LLM_BACKEND_URL":      "backend_url",
     "TRADINGAGENTS_OUTPUT_LANGUAGE":      "output_language",
     "TRADINGAGENTS_MAX_DEBATE_ROUNDS":    "max_debate_rounds",
@@ -28,6 +30,8 @@ def _coerce(value: str, reference):
         return int(value)
     if isinstance(reference, float):
         return float(value)
+    if isinstance(reference, dict):
+        return json.loads(value)
     return value
 
 
@@ -54,6 +58,22 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "llm_provider": "openai",
     "deep_think_llm": "gpt-5.4",
     "quick_think_llm": "gpt-5.4-mini",
+    # Per-agent model overrides. Maps an agent key to a model name for the
+    # configured llm_provider; any agent not listed falls back to its tier
+    # default (quick_think_llm, or deep_think_llm for the deep-tier agents).
+    # Most useful with llm_provider="openrouter", where one API key exposes
+    # every major lab's models under namespaced IDs, e.g.:
+    #   "agent_models": {
+    #       "market_analyst":    "google/gemini-3-flash",
+    #       "research_manager":  "anthropic/claude-opus-5",
+    #       "portfolio_manager": "openai/gpt-5.4",
+    #   }
+    # Valid keys: market_analyst, sentiment_analyst, news_analyst,
+    # fundamentals_analyst, bull_researcher, bear_researcher,
+    # research_manager (deep), trader, aggressive_analyst,
+    # conservative_analyst, neutral_analyst, portfolio_manager (deep),
+    # reflector, signal_processor.
+    "agent_models": {},
     # When None, each provider's client falls back to its own default endpoint
     # (api.openai.com for OpenAI, generativelanguage.googleapis.com for Gemini, ...).
     # The CLI overrides this per provider when the user picks one. Keeping a

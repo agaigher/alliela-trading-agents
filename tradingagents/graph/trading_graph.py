@@ -76,29 +76,22 @@ class TradingAgentsGraph:
         os.makedirs(self.config["data_cache_dir"], exist_ok=True)
         os.makedirs(self.config["results_dir"], exist_ok=True)
 
-        # Initialize LLMs with provider-specific thinking configuration
-        llm_kwargs = self._get_provider_kwargs()
+        # Initialize LLM resolution with provider-specific thinking
+        # configuration. Clients are created lazily per distinct model by
+        # _llm_for so a run only pays for the models it actually uses;
+        # config["agent_models"] overrides the tier default per agent.
+        self._llm_kwargs = self._get_provider_kwargs()
 
         # Add callbacks to kwargs if provided (passed to LLM constructor)
         if self.callbacks:
-            llm_kwargs["callbacks"] = self.callbacks
+            self._llm_kwargs["callbacks"] = self.callbacks
 
-        deep_client = create_llm_client(
-            provider=self.config["llm_provider"],
-            model=self.config["deep_think_llm"],
-            base_url=self.config.get("backend_url"),
-            **llm_kwargs,
-        )
-        quick_client = create_llm_client(
-            provider=self.config["llm_provider"],
-            model=self.config["quick_think_llm"],
-            base_url=self.config.get("backend_url"),
-            **llm_kwargs,
-        )
+        self._llm_cache: Dict[str, Any] = {}
 
-        self.deep_thinking_llm = deep_client.get_llm()
-        self.quick_thinking_llm = quick_client.get_llm()
-        
+        # Tier defaults, kept as attributes for backward compatibility.
+        self.deep_thinking_llm = self._llm_for(tier="deep")
+        self.quick_thinking_llm = self._llm_for(tier="quick")
+
         self.memory_log = TradingMemoryLog(self.config)
 
         # Create tool nodes
@@ -110,8 +103,7 @@ class TradingAgentsGraph:
             max_risk_discuss_rounds=self.config["max_risk_discuss_rounds"],
         )
         self.graph_setup = GraphSetup(
-            self.quick_thinking_llm,
-            self.deep_thinking_llm,
+            self._llm_for,
             self.tool_nodes,
             self.conditional_logic,
             analyst_concurrency_limit=self.config.get("analyst_concurrency_limit", 1),
@@ -120,8 +112,8 @@ class TradingAgentsGraph:
         self.propagator = Propagator(
             max_recur_limit=self.config.get("max_recur_limit", 100),
         )
-        self.reflector = Reflector(self.quick_thinking_llm)
-        self.signal_processor = SignalProcessor(self.quick_thinking_llm)
+        self.reflector = Reflector(self._llm_for("reflector"))
+        self.signal_processor = SignalProcessor(self._llm_for("signal_processor"))
 
         # State tracking
         self.curr_state = None
@@ -132,6 +124,32 @@ class TradingAgentsGraph:
         self.workflow = self.graph_setup.setup_graph(selected_analysts)
         self.graph = self.workflow.compile()
         self._checkpointer_ctx = None
+
+    def _llm_for(self, agent_key: Optional[str] = None, tier: str = "quick"):
+        """Resolve the LLM instance for an agent.
+
+        ``config["agent_models"][agent_key]`` (when set) selects the model;
+        otherwise the agent uses its tier default (``quick_think_llm``, or
+        ``deep_think_llm`` when ``tier="deep"``). Instances are cached per
+        distinct model name, so agents sharing a model share one client.
+        """
+        tier_default = (
+            self.config["deep_think_llm"]
+            if tier == "deep"
+            else self.config["quick_think_llm"]
+        )
+        model = tier_default
+        if agent_key:
+            model = self.config.get("agent_models", {}).get(agent_key) or tier_default
+        if model not in self._llm_cache:
+            client = create_llm_client(
+                provider=self.config["llm_provider"],
+                model=model,
+                base_url=self.config.get("backend_url"),
+                **self._llm_kwargs,
+            )
+            self._llm_cache[model] = client.get_llm()
+        return self._llm_cache[model]
 
     def _get_provider_kwargs(self) -> Dict[str, Any]:
         """Get provider-specific kwargs for LLM client creation."""

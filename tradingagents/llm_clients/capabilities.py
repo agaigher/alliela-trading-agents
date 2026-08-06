@@ -118,10 +118,18 @@ _BY_PATTERN: list[tuple[re.Pattern[str], ModelCapabilities]] = [
 
 
 def get_capabilities(model_name: str) -> ModelCapabilities:
-    """Resolve capabilities by exact ID, then pattern, then default."""
+    """Resolve capabilities by exact ID, then pattern, then default.
+
+    Gateway-namespaced IDs (OpenRouter's "deepseek/deepseek-reasoner",
+    "minimax/MiniMax-M2") are retried with the bare ID after the last "/"
+    so routed models inherit the same structured-output quirks as their
+    native counterparts.
+    """
     if model_name in _BY_ID:
         return _BY_ID[model_name]
     for pattern, caps in _BY_PATTERN:
         if pattern.match(model_name):
             return caps
+    if "/" in model_name:
+        return get_capabilities(model_name.rsplit("/", 1)[-1])
     return _DEFAULT
