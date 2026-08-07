@@ -129,6 +129,51 @@ of documents produced. This is what feeds the History knowledge store
 and the site's Run Ledger; treat any pipeline change that would drop or
 summarise a node's output as a regression.
 
+## Knowledge-graph memory (requirement)
+
+Binding requirement for the shared-state layer (the product spec is the
+Fund Knowledge Graph modal — `KNOWLEDGE_GRAPH_INFO` in
+`web/pages/home.py`; see `web/CLAUDE.md` § Shared Knowledge Layer):
+the five knowledge stores (Mandate, Positions, Theses, Lessons, Archive)
+are **typed views over one property graph**, not five silos.
+
+**Schema (minimum node and edge types).**
+
+- Entity nodes: `Ticker`, `Sector`, `Factor`, `Event`, plus the fund's
+  artefacts — `Thesis`, `Decision`, `Outcome`, `Lesson`, `Document`
+  (every Document Trail box is a `Document` node).
+- Seat identity: `Person` and `Duty` are first-class node types joined
+  by `HOLDS` edges — one person can hold several duties (the PM's three
+  duties are one `Person` with three `Duty` nodes). **Every `Decision`
+  and `Outcome` carries a `PRODUCED_BY` edge to the `Duty` that made
+  it**, so per-seat track records are graph queries, not archaeology.
+- Lessons attach to every entity they generalise over (`ABOUT` edges to
+  `Ticker` / `Sector` / `Factor` / `Event`), which is what makes
+  retrieval associative rather than keyword-bound.
+
+**Write regime.** Writes are curated — only the writers the flows
+already draw: Execution's fills, the Research Manager's theses,
+decision amendments, the Post-mortem's lessons, the Document Trails'
+archive entries. Every write carries `run_id` provenance so any seat's
+memory is reconstructable **as-of any run** — the Retrospective must be
+able to replay exactly what an agent knew when it decided. No agent
+writes free-form into its own memory: a self-written memory is a
+self-edited prompt, which the Developer-Agent guardrail exists to
+prevent.
+
+**Read contract.** Per-agent memory is a *view*, not a store: the
+subgraph within k hops of the seat's `Duty` node, filtered to lesson
+and outcome edges, assembled at prompt-build time and exposed through
+the shared tool interface (same access path as the PMS reads). Any
+agent may query; reads are unrestricted.
+
+**Store.** Neo4j is the natural engine (the Mac Mini already runs one
+for the OpenData stack — the Alliela instance must be its own container
+under the `alliela-trading` compose project, never a shared database).
+Until the graph lands, the file/JSON-backed stores remain the interim
+implementation; treat any new store code that couples one store's
+internals to another as a regression against the one-graph model.
+
 ## Removed from the upstream vendoring
 
 The following upstream files were intentionally deleted from this copy
