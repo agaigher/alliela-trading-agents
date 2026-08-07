@@ -1,9 +1,24 @@
 # `trading-agents/` CLAUDE guidance
 
-This folder is the multi-agent LLM hedge-fund framework — the new Alliela
-product backend. **Vendored** from `TauricResearch/TradingAgents` via
-`git subtree --squash`, then stripped down to the absolute minimum needed
-to run the pipeline as a library from the terminal.
+This folder is the multi-agent LLM hedge-fund framework — the Alliela
+engine. Two layers live here:
+
+- **`alliela/` — the Alliela pipeline core (phase 4, being built).**
+  Plain Python, no LangGraph: explicit stage functions, Pydantic
+  document models held to the site's 27 sample outputs, and a thin
+  OpenRouter client (`alliela/llm.py`) that captures the complete raw
+  response per the telemetry contract below. The engine emits captured
+  calls + documents through a **sink protocol** (`alliela/sinks.py`)
+  and ships only a file sink — Postgres persistence, queue consumption,
+  and flow-version stamping live in the `api/` worker, never here (this
+  is the open-source unit). Current coverage: Tier 01 (Idea
+  Generation — three desks + Head, one revision round). Build
+  decisions are recorded in `docs/backend-plan.md` § phase 4.
+- **`tradingagents/` — the vendored TauricResearch framework**, kept as
+  the data/tools library (dataflows, discovery tools). Its old
+  LangGraph pipeline is NOT being evolved into the Alliela pipeline and
+  will be trimmed further as the core takes over. Vendored via
+  `git subtree --squash`; details below.
 
 ## Key facts
 

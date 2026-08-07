@@ -19,3 +19,11 @@ review-and-revise loops, a pre-mortem stage, an independent risk authority
 signing binding constraints with a portfolio-manager compliance handshake,
 funding (portfolio construction) and execution stages writing to a portfolio
 state, multi-provider LLM client work, and prompt/schema redesign throughout.
+
+The Alliela pipeline core (the `alliela/` package) is a ground-up
+reimplementation added alongside the upstream framework: plain-Python stage
+orchestration with typed Pydantic documents, a thin OpenRouter client with
+full raw-response capture (telemetry contract), and a sink protocol
+separating the engine from any serving infrastructure. The upstream
+LangGraph pipeline under `tradingagents/` is retained as a data/tools
+library and is no longer the execution path.
