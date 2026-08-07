@@ -122,6 +122,11 @@ Per call, keyed by `run_id` + agent key + sequence:
 - Errors and the retry chain (what failed, what was retried, final state).
 - The **raw response JSON** alongside the parsed fields, so nothing
   OpenRouter adds later is lost retroactively.
+- The **flow version** (registered pipeline version + engine git commit)
+  the run executed under — one version per run, inherited by every call
+  and document. The Retrospective evaluates each decision against the
+  version that made it, so an unstamped call is an unattributable one
+  (see `docs/backend-plan.md` § "Flow versioning").
 
 Per run, roll up: stage-level and run-level call counts, token totals
 (in/out/reasoning), cost USD, wall-clock duration, outcome, and the list
