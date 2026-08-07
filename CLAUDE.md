@@ -134,7 +134,7 @@ summarise a node's output as a regression.
 Binding requirement for the shared-state layer (the product spec is the
 Fund Knowledge Graph modal — `KNOWLEDGE_GRAPH_INFO` in
 `web/pages/home.py`; see `web/CLAUDE.md` § Shared Knowledge Layer):
-the five knowledge stores (Mandate, Positions, Theses, Lessons, Archive)
+the five knowledge stores (Mandate, Portfolio State, Theses, Lessons, Archive)
 are **typed views over one property graph**, not five silos.
 
 **Schema (minimum node and edge types).**
