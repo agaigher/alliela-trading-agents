@@ -75,6 +75,81 @@ class CombinedIdeasBook(BaseModel):
         return _doc("".join(parts))
 
 
+class LensScore(BaseModel):
+    ticker: str
+    score: int = Field(ge=1, le=5, description="1 (worst) to 5 (best) "
+                                               "through this lens only")
+    fatal: bool = Field(description="True kills the candidate outright "
+                                    "regardless of other lenses")
+    rationale: str = Field(description="Two sentences max, this lens "
+                                       "only")
+
+
+class Scorecard(BaseModel):
+    """One scorer's read of every candidate through a single lens."""
+    lens: str
+    method_note: str = Field(description="How this lens judged, in one "
+                                         "or two sentences")
+    scores: list[LensScore]
+
+    def to_html(self, title):
+        rows = "".join(
+            f"<tr><td>{_e(s.ticker)}</td><td>{s.score}/5</td>"
+            f"<td>{'FATAL' if s.fatal else '—'}</td>"
+            f"<td>{_e(s.rationale)}</td></tr>" for s in self.scores)
+        note = ""
+        if self.lens == "edge":
+            note = ("<p><em>Triage signal only — edge scores expire "
+                    "when the Analyst Reports land and may never be "
+                    "cited downstream as evidence.</em></p>")
+        return _doc(
+            f"<h3>{_e(title)}</h3>"
+            f"<p>{_e(self.method_note)}</p>{note}"
+            "<table><thead><tr><th>Ticker</th><th>Score</th>"
+            "<th>Fatal</th><th>Rationale</th></tr></thead>"
+            f"<tbody>{rows}</tbody></table>")
+
+
+class RankedReject(BaseModel):
+    ticker: str
+    rank: int
+    reason: str = Field(description="Why it lost — name the lens")
+
+
+class IdeaBrief(BaseModel):
+    """The Chair's handoff to the Analyst team. Aggregated by judgment,
+    not by summing scores; a fatal in any lens eliminates."""
+    viable: bool = Field(description="False if no candidate survived")
+    ticker: str = Field(description="Selected ticker; '—' if not "
+                                    "viable")
+    name: str
+    direction: str
+    catalyst: str
+    rationale: str = Field(description="Why this one won, across "
+                                       "lenses, by judgment")
+    coverage_notes: str = Field(description="What the analysts should "
+                                            "verify first; known gaps")
+    ranked_rejects: list[RankedReject]
+
+    def to_html(self, title):
+        head = (f"<h3>{_e(title)}</h3>"
+                f"<h4>{_e(self.ticker)} · {_e(self.name)} — "
+                f"{_e(self.direction.upper())}</h4>"
+                if self.viable else
+                f"<h3>{_e(title)}</h3><h4>No viable candidate — "
+                f"run ends at Selection</h4>")
+        rejects = "".join(
+            f"<li><strong>{_e(r.ticker)}</strong> (#{r.rank}) — "
+            f"{_e(r.reason)}</li>" for r in self.ranked_rejects)
+        return _doc(
+            head
+            + f"<p><strong>Catalyst:</strong> {_e(self.catalyst)}</p>"
+            + f"<p>{_e(self.rationale)}</p>"
+            + f"<p><strong>Coverage notes:</strong> "
+              f"{_e(self.coverage_notes)}</p>"
+            + f"<h4>Ranked rejects</h4><ul>{rejects}</ul>")
+
+
 def _e(s):
     return _html.escape(str(s))
 
