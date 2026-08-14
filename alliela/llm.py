@@ -50,7 +50,11 @@ class OpenRouter:
         self.timeout = timeout
 
     def call(self, *, model, messages, agent, stage, seq,
-             temperature=0.4, max_tokens=8192, retries=3):
+             temperature=0.4, max_tokens=8192, retries=3,
+             reasoning=None):
+        """reasoning: OpenRouter unified reasoning config, e.g.
+        {"max_tokens": 2048} — enables extended thinking on models
+        that support it; the blocks land in CapturedCall.reasoning."""
         cap = CapturedCall(agent=agent, stage=stage, seq=seq, model=model)
         grew = False           # one automatic retry at 2× on truncation
         body = {
@@ -60,6 +64,8 @@ class OpenRouter:
             "max_tokens": max_tokens,
             "usage": {"include": True},
         }
+        if reasoning:
+            body["reasoning"] = reasoning
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "HTTP-Referer": "https://alliela.com",

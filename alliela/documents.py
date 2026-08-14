@@ -215,6 +215,115 @@ class AnalystRevisionNotes(BaseModel):
         return _doc("".join(parts))
 
 
+class KillCriterion(BaseModel):
+    """Dated and decidable — the v4 kill-criteria discipline: when the
+    date arrives, named data answers fired / not fired. Never vibes."""
+    date: str = Field(description="YYYY-MM-DD or a named dated event")
+    criterion: str = Field(description="The falsifiable statement")
+    data_source: str = Field(description="What data decides it")
+
+
+class Thesis(BaseModel):
+    """The Research Manager's judgment of the debate — decisive, not a
+    summary. The document the fund is named for."""
+    ticker: str
+    name: str
+    direction: str
+    verdict: str = Field(description="Which side won and why, one "
+                                     "paragraph, citing the decisive "
+                                     "evidence")
+    thesis: str = Field(description="The core argument, in prose")
+    path: str = Field(description="Expected path: target, timeframe, "
+                                  "what has to happen")
+    kill_criteria: list[KillCriterion]
+    strategic_actions: list[str] = Field(
+        description="Concrete next steps for Pre-Trade Structuring")
+    key_risks: list[str]
+
+    def to_html(self, title):
+        kc = "".join(
+            f"<tr><td>{_e(k.date)}</td><td>{_e(k.criterion)}</td>"
+            f"<td>{_e(k.data_source)}</td></tr>"
+            for k in self.kill_criteria)
+        return _doc(
+            f"<h3>{_e(title)}</h3>"
+            f"<h4>{_e(self.ticker)} · {_e(self.name)} — "
+            f"{_e(self.direction.upper())}</h4>"
+            f"<p><strong>Verdict.</strong> {_e(self.verdict)}</p>"
+            f"<p>{_e(self.thesis)}</p>"
+            f"<p><strong>Path.</strong> {_e(self.path)}</p>"
+            "<h4>Kill criteria — dated, decidable</h4>"
+            "<table><thead><tr><th>Date</th><th>Criterion</th>"
+            "<th>Decided by</th></tr></thead>"
+            f"<tbody>{kc}</tbody></table>"
+            "<h4>Strategic actions</h4><ul>"
+            + "".join(f"<li>{_e(a)}</li>"
+                      for a in self.strategic_actions)
+            + "</ul><h4>Key risks</h4><ul>"
+            + "".join(f"<li>{_e(r)}</li>" for r in self.key_risks)
+            + "</ul>")
+
+
+class FailureMode(BaseModel):
+    mode: str = Field(description="How the position failed, told as "
+                                  "retrospective fact")
+    early_signal: str = Field(description="What would have shown it "
+                                          "first")
+    likelihood_note: str
+
+
+class PreMortemReview(BaseModel):
+    """Prospective hindsight: it is twelve months later and the
+    position failed — explain why. Speculative by design."""
+    premise: str
+    failure_modes: list[FailureMode]
+    most_likely: str = Field(description="The single most probable "
+                                         "failure path")
+    monitoring_additions: list[str] = Field(
+        description="What to watch that the thesis does not already "
+                    "watch")
+
+    def to_html(self, title):
+        modes = "".join(
+            f"<h4>{_e(m.mode)}</h4>"
+            f"<p><strong>Early signal:</strong> {_e(m.early_signal)}"
+            f"<br><strong>Likelihood:</strong> "
+            f"{_e(m.likelihood_note)}</p>"
+            for m in self.failure_modes)
+        return _doc(
+            f"<h3>{_e(title)}</h3><p><em>{_e(self.premise)}</em></p>"
+            + modes
+            + f"<p><strong>Most likely path:</strong> "
+              f"{_e(self.most_likely)}</p>"
+            + "<h4>Monitoring additions</h4><ul>"
+            + "".join(f"<li>{_e(m)}</li>"
+                      for m in self.monitoring_additions)
+            + "</ul>")
+
+
+def debate_doc_html(side, turns):
+    """One debater's case — their turns in order."""
+    labels = ["Opening", "Rebuttal", "Closing"]
+    parts = []
+    for i, t in enumerate(turns):
+        label = labels[i] if i < len(labels) else f"Turn {i + 1}"
+        parts.append(f"<h4>{label}</h4>"
+                     + "".join(f"<p>{_e(p)}</p>"
+                               for p in t.split("\n\n") if p.strip()))
+    return _doc(f"<h3>{_e(side)} Case</h3>" + "".join(parts))
+
+
+def transcript_html(title, interleaved):
+    """Full debate transcript — (speaker, text) turns verbatim."""
+    parts = [f"<h3>{_e(title)}</h3>"]
+    for speaker, text in interleaved:
+        parts.append(f"<h4>{_e(speaker)}</h4>"
+                     + "".join(f"<p>{_e(p)}</p>"
+                               for p in text.split("\n\n")
+                               if p.strip()))
+    return _doc("".join(parts))
+
+
 def _e(s):
     return _html.escape(str(s))
 

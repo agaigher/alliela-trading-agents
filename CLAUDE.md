@@ -19,7 +19,11 @@ engine. Two layers live here:
   Analyst team — four specialists on real data packs (`price_pack`,
   `quote_summary` via the crumb-authenticated endpoint, news) + the
   Lead's audit-and-one-revision loop, reports forbidden from citing
-  numbers outside their pack).
+  numbers outside their pack; Thesis Desk — Bull/Bear at three rounds
+  on the frozen evidence, Research Manager judging into a Thesis with
+  dated decidable kill criteria, Pre-mortem in prospective hindsight —
+  all on the deep model with extended reasoning archived; conviction
+  can be withdrawn, and was on its first real run).
   Build decisions are recorded in `docs/backend-plan.md` § phase 4.
 - **`tradingagents/` — the vendored TauricResearch framework**, kept as
   the data/tools library (dataflows, discovery tools). Its old

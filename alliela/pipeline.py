@@ -1,12 +1,13 @@
 """Pipeline entry points. Coverage grows tier by tier — currently
-Tiers 01–03 (Idea Generation → Selection Committee → Analyst team).
-Each run returns a rollup the runner persists: per-stage rows, totals,
-outcome, and the document list."""
+Tiers 01–04 (Idea Generation → Selection Committee → Analyst team →
+Thesis Desk). Each run returns a rollup the runner persists: per-stage
+rows, totals, outcome, and the document list."""
 import time
 
 from alliela.stages.analysts import run_analysts
 from alliela.stages.ideagen import run_ideagen
 from alliela.stages.selection import run_selection
+from alliela.stages.thesis import run_thesis
 
 
 def _fmt_tokens(n):
@@ -47,10 +48,18 @@ def run_origination(ctx, llm):
     all_calls += calls
     all_docs += docs
 
+    thesis = None
     if brief.viable:
-        docs, calls, _reports = run_analysts(ctx, llm, brief)
+        docs, calls, reports = run_analysts(ctx, llm, brief)
         stages.append(_stage_row("Analyst Team", "4 analysts + Lead",
                                  ctx.quick_model, calls))
+        all_calls += calls
+        all_docs += docs
+
+        docs, calls, thesis = run_thesis(ctx, llm, brief, reports)
+        stages.append(_stage_row("Thesis Desk",
+                                 "Bull · Bear ×3 + Mgr + Pre-mortem",
+                                 ctx.deep_model, calls))
         all_calls += calls
         all_docs += docs
 
@@ -63,10 +72,22 @@ def run_origination(ctx, llm):
     elapsed = int(time.monotonic() - started)
 
     prefix = f"“{ctx.tip}” → " if ctx.tip else "Free scan → "
-    if brief.viable:
+    if thesis is not None:
+        d = thesis.direction.lower()
+        if "no position" in d or "pass" in d or "withdrawn" in d:
+            outcome = (prefix + f"{thesis.ticker} judged — conviction "
+                       f"withdrawn at the Thesis Desk "
+                       f"({len(thesis.kill_criteria)} dated re-entry "
+                       f"criteria) · {len(all_docs)} docs")
+        else:
+            outcome = (prefix + f"{thesis.ticker} thesis formed "
+                       f"({thesis.direction.upper()}, "
+                       f"{len(thesis.kill_criteria)} kill criteria) · "
+                       f"tiers 05–09 not yet built · "
+                       f"{len(all_docs)} docs")
+    elif brief.viable:
         outcome = (prefix + f"{brief.ticker} selected "
-                   f"({len(combined.candidates)} scored) · analysts "
-                   f"reported · tiers 04–09 not yet built · "
+                   f"({len(combined.candidates)} scored) · "
                    f"{len(all_docs)} docs")
     else:
         outcome = (prefix + "no candidate survived Selection — "
