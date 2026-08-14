@@ -100,6 +100,109 @@ def ticker_snapshot(ticker):
     }
 
 
+def price_pack(ticker):
+    """One year of daily bars distilled into the numbers a market
+    analyst starts from. Real data or an explicit gap — never invented."""
+    try:
+        r = httpx.get(CHART.format(ticker),
+                      params={"range": "1y", "interval": "1d"},
+                      headers=_UA, timeout=20.0, follow_redirects=True)
+        r.raise_for_status()
+        res = r.json()["chart"]["result"][0]
+        meta = res["meta"]
+        q = res["indicators"]["quote"][0]
+        closes = [c for c in q["close"] if c]
+        vols = [v for v in q["volume"] if v]
+        if len(closes) < 30:
+            return {"ticker": ticker, "status": "insufficient_history"}
+        last = closes[-1]
+
+        def ret(days):
+            if len(closes) > days:
+                return round((last / closes[-days - 1] - 1) * 100, 1)
+            return None
+
+        sma = lambda n: (sum(closes[-n:]) / n if len(closes) >= n
+                         else None)
+        hi, lo = max(closes), min(closes)
+        return {
+            "ticker": ticker, "status": "ok",
+            "currency": meta.get("currency"),
+            "price": round(last, 2),
+            "returns_pct": {"1m": ret(21), "3m": ret(63),
+                            "6m": ret(126), "12m": ret(252)},
+            "week52_high": round(hi, 2), "week52_low": round(lo, 2),
+            "pct_off_52w_high": round((last / hi - 1) * 100, 1),
+            "sma50_rel_pct": (round((last / sma(50) - 1) * 100, 1)
+                              if sma(50) else None),
+            "sma200_rel_pct": (round((last / sma(200) - 1) * 100, 1)
+                               if sma(200) else None),
+            "avg_daily_volume_3m": (int(sum(vols[-63:]) / len(vols[-63:]))
+                                    if vols else None),
+        }
+    except Exception:
+        return {"ticker": ticker, "status": "data_unavailable"}
+
+
+def quote_summary(ticker):
+    """Fundamentals + positioning modules from Yahoo quoteSummary (the
+    crumb-authenticated endpoint), reduced to plain values. Missing
+    fields stay missing — coverage gaps are the analyst's to flag."""
+    modules = ("financialData,defaultKeyStatistics,summaryDetail,"
+               "recommendationTrend,majorHoldersBreakdown")
+    try:
+        with httpx.Client(headers=_UA, timeout=20.0,
+                          follow_redirects=True) as c:
+            c.get("https://fc.yahoo.com")
+            crumb = c.get("https://query1.finance.yahoo.com"
+                          "/v1/test/getcrumb").text
+            r = c.get("https://query1.finance.yahoo.com"
+                      f"/v10/finance/quoteSummary/{ticker}",
+                      params={"modules": modules, "crumb": crumb})
+            r.raise_for_status()
+            d = r.json()["quoteSummary"]["result"][0]
+    except Exception:
+        return {"ticker": ticker, "status": "data_unavailable"}
+
+    def v(section, key):
+        raw = (d.get(section) or {}).get(key)
+        if isinstance(raw, dict):
+            return raw.get("fmt") or raw.get("raw")
+        return raw
+
+    fund = {k: v("financialData", k) for k in (
+        "totalRevenue", "revenueGrowth", "grossMargins",
+        "operatingMargins", "profitMargins", "returnOnEquity",
+        "totalDebt", "debtToEquity", "freeCashflow",
+        "earningsGrowth")}
+    fund.update({k: v("defaultKeyStatistics", k) for k in (
+        "forwardPE", "trailingEps", "forwardEps", "pegRatio",
+        "priceToBook", "enterpriseToEbitda")})
+    fund["trailingPE"] = v("summaryDetail", "trailingPE")
+    fund["dividendYield"] = v("summaryDetail", "dividendYield")
+    fund["marketCap"] = v("summaryDetail", "marketCap")
+    positioning = {
+        "insidersPercentHeld": v("majorHoldersBreakdown",
+                                 "insidersPercentHeld"),
+        "institutionsPercentHeld": v("majorHoldersBreakdown",
+                                     "institutionsPercentHeld"),
+        "shortPercentOfFloat": v("defaultKeyStatistics",
+                                 "shortPercentOfFloat"),
+        "sharesShort": v("defaultKeyStatistics", "sharesShort"),
+        "shortRatio": v("defaultKeyStatistics", "shortRatio"),
+        "recommendationTrend": (d.get("recommendationTrend") or
+                                {}).get("trend"),
+        "targetMeanPrice": v("financialData", "targetMeanPrice"),
+        "numberOfAnalystOpinions": v("financialData",
+                                     "numberOfAnalystOpinions"),
+    }
+    return {"ticker": ticker, "status": "ok",
+            "fundamentals": {k: x for k, x in fund.items()
+                             if x is not None},
+            "positioning": {k: x for k, x in positioning.items()
+                            if x is not None}}
+
+
 def context_pack(queries, per_query=8):
     """Formatted headline block for prompt injection."""
     lines = []

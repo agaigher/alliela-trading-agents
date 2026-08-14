@@ -11,11 +11,15 @@ engine. Two layers live here:
   calls + documents through a **sink protocol** (`alliela/sinks.py`)
   and ships only a file sink — Postgres persistence, queue consumption,
   and flow-version stamping live in the `api/` worker, never here (this
-  is the open-source unit). Current coverage: Tiers 01–02 (Idea
+  is the open-source unit). Current coverage: Tiers 01–03 (Idea
   Generation — three desks + Head, one revision round; Selection
   Committee — three lens scorers + Chair, with the feasibility lens
   running on real Yahoo verification via `market.ticker_snapshot` —
-  fantasy tickers and sub-floor liquidity are fatal on evidence).
+  fantasy tickers and sub-floor liquidity are fatal on evidence;
+  Analyst team — four specialists on real data packs (`price_pack`,
+  `quote_summary` via the crumb-authenticated endpoint, news) + the
+  Lead's audit-and-one-revision loop, reports forbidden from citing
+  numbers outside their pack).
   Build decisions are recorded in `docs/backend-plan.md` § phase 4.
 - **`tradingagents/` — the vendored TauricResearch framework**, kept as
   the data/tools library (dataflows, discovery tools). Its old

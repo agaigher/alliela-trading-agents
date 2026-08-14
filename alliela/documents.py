@@ -150,6 +150,71 @@ class IdeaBrief(BaseModel):
             + f"<h4>Ranked rejects</h4><ul>{rejects}</ul>")
 
 
+class ReportSection(BaseModel):
+    heading: str
+    body: str = Field(description="Prose paragraphs; cite specific "
+                                  "numbers, dates, sources")
+
+
+class AnalystReport(BaseModel):
+    """One specialist's report — long-form evidence, not bullet spam.
+    The format the sample outputs bind: sections of sourced prose, a
+    summary table, and honest coverage gaps."""
+    report_type: str
+    headline: str = Field(description="The one-line takeaway")
+    sections: list[ReportSection]
+    summary_table: list[list[str]] = Field(
+        description="First row is the header row")
+    coverage_gaps: list[str] = Field(
+        description="What the data did not cover — stated, not hidden")
+
+    def to_html(self, title):
+        secs = "".join(f"<h4>{_e(s.heading)}</h4><p>{_e(s.body)}</p>"
+                       for s in self.sections)
+        table = ""
+        if self.summary_table:
+            head = "".join(f"<th>{_e(c)}</th>"
+                           for c in self.summary_table[0])
+            rows = "".join(
+                "<tr>" + "".join(f"<td>{_e(c)}</td>" for c in row)
+                + "</tr>" for row in self.summary_table[1:])
+            table = (f"<table><thead><tr>{head}</tr></thead>"
+                     f"<tbody>{rows}</tbody></table>")
+        gaps = ""
+        if self.coverage_gaps:
+            gaps = ("<h4>Coverage gaps</h4><ul>"
+                    + "".join(f"<li>{_e(g)}</li>"
+                              for g in self.coverage_gaps) + "</ul>")
+        return _doc(f"<h3>{_e(title)}</h3>"
+                    f"<p><strong>{_e(self.headline)}</strong></p>"
+                    f"{secs}{table}{gaps}")
+
+
+class ReportAudit(BaseModel):
+    report_type: str
+    score: int = Field(ge=1, le=10)
+    verdict: str = Field(description="One line: does it answer the "
+                                     "brief?")
+    revisions: list[str] = Field(description="Actionable revision "
+                                             "requests")
+
+
+class AnalystRevisionNotes(BaseModel):
+    """The Analyst Lead's audit of all four reports — one revision
+    pass each, then the reports freeze."""
+    audits: list[ReportAudit]
+
+    def to_html(self, title):
+        parts = [f"<h3>{_e(title)}</h3>"]
+        for a in self.audits:
+            revs = "".join(f"<li>{_e(r)}</li>" for r in a.revisions)
+            parts.append(
+                f"<h4>{_e(a.report_type.title())} Report — "
+                f"{a.score}/10</h4><p>{_e(a.verdict)}</p>"
+                f"<ul>{revs}</ul>")
+        return _doc("".join(parts))
+
+
 def _e(s):
     return _html.escape(str(s))
 

@@ -1,9 +1,10 @@
 """Pipeline entry points. Coverage grows tier by tier — currently
-Tiers 01–02 (Idea Generation → Selection Committee). Each run returns
-a rollup the runner persists: per-stage rows, totals, outcome, and the
-document list."""
+Tiers 01–03 (Idea Generation → Selection Committee → Analyst team).
+Each run returns a rollup the runner persists: per-stage rows, totals,
+outcome, and the document list."""
 import time
 
+from alliela.stages.analysts import run_analysts
 from alliela.stages.ideagen import run_ideagen
 from alliela.stages.selection import run_selection
 
@@ -46,6 +47,13 @@ def run_origination(ctx, llm):
     all_calls += calls
     all_docs += docs
 
+    if brief.viable:
+        docs, calls, _reports = run_analysts(ctx, llm, brief)
+        stages.append(_stage_row("Analyst Team", "4 analysts + Lead",
+                                 ctx.quick_model, calls))
+        all_calls += calls
+        all_docs += docs
+
     tok_in = sum(c.usage.get("prompt_tokens", 0) for c in all_calls)
     tok_out = sum(c.usage.get("completion_tokens", 0) for c in all_calls)
     reasoning = sum(
@@ -56,9 +64,10 @@ def run_origination(ctx, llm):
 
     prefix = f"“{ctx.tip}” → " if ctx.tip else "Free scan → "
     if brief.viable:
-        outcome = (prefix + f"{brief.ticker} selected at Committee "
-                   f"({len(combined.candidates)} scored) · tiers 03–09 "
-                   f"not yet built · {len(all_docs)} docs")
+        outcome = (prefix + f"{brief.ticker} selected "
+                   f"({len(combined.candidates)} scored) · analysts "
+                   f"reported · tiers 04–09 not yet built · "
+                   f"{len(all_docs)} docs")
     else:
         outcome = (prefix + "no candidate survived Selection — "
                    "no-trade run (first-class outcome) · "
