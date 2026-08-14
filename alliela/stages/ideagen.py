@@ -10,6 +10,7 @@ import json
 
 from alliela.documents import CombinedIdeasBook, IdeaBook, RevisionNote
 from alliela.market import context_pack
+from alliela.structured import ask_validated
 
 DESKS = [
     ("macro", "Macro Desk",
@@ -66,13 +67,11 @@ def run_ideagen(ctx, llm):
         per_query=8)
 
     def ask(agent, system, user, schema_cls):
-        cap = llm.call(model=ctx.quick_model,
-                       messages=_json_msg(system, user),
-                       agent=agent, stage=STAGE, seq=ctx.next_seq())
-        calls.append(cap)
-        if ctx.sink:
-            ctx.sink.on_call(cap)
-        return schema_cls.model_validate(cap.json_text())
+        return ask_validated(
+            ctx, llm, agent=agent, stage=STAGE, system=system,
+            user=user, validate=schema_cls.model_validate,
+            schema_json=json.dumps(schema_cls.model_json_schema()),
+            calls=calls)
 
     # 1-3: desk drafts
     books = {}
@@ -97,14 +96,15 @@ def run_ideagen(ctx, llm):
     head_user = "The three books:\n\n" + "\n\n".join(
         f"## {name}\n" + books[key].model_dump_json(indent=1)
         for key, name, _ in DESKS)
-    cap = llm.call(model=ctx.quick_model,
-                   messages=_json_msg(head_sys, head_user),
-                   agent="Head of Idea Generation", stage=STAGE,
-                   seq=ctx.next_seq())
-    calls.append(cap)
-    if ctx.sink:
-        ctx.sink.on_call(cap)
-    notes = [RevisionNote.model_validate(n) for n in cap.json_text()]
+    notes = ask_validated(
+        ctx, llm, agent="Head of Idea Generation", stage=STAGE,
+        system=head_sys, user=head_user,
+        validate=lambda data: [RevisionNote.model_validate(n)
+                               for n in data],
+        schema_json=json.dumps(
+            {"type": "array",
+             "items": RevisionNote.model_json_schema()}),
+        calls=calls)
     notes_by_desk = {}
     for n, (key, _, _) in zip(notes, DESKS):
         notes_by_desk[key] = n
@@ -134,14 +134,8 @@ def run_ideagen(ctx, llm):
     compile_user = "The three revised books:\n\n" + "\n\n".join(
         f"## {name}\n" + books[key].model_dump_json(indent=1)
         for key, name, _ in DESKS)
-    cap = llm.call(model=ctx.quick_model,
-                   messages=_json_msg(compile_sys, compile_user),
-                   agent="Head of Idea Generation", stage=STAGE,
-                   seq=ctx.next_seq())
-    calls.append(cap)
-    if ctx.sink:
-        ctx.sink.on_call(cap)
-    combined = CombinedIdeasBook.model_validate(cap.json_text())
+    combined = ask("Head of Idea Generation", compile_sys,
+                   compile_user, CombinedIdeasBook)
 
     # documents
     titles = {"macro": "Macro Ideas Book",

@@ -15,6 +15,7 @@ import json
 
 from alliela.documents import IdeaBrief, Scorecard
 from alliela.market import ticker_snapshot
+from alliela.structured import ask_validated
 
 STAGE = "Selection Committee"
 
@@ -56,13 +57,11 @@ def run_selection(ctx, llm, combined):
     snapshots = [ticker_snapshot(c.ticker) for c in combined.candidates]
 
     def ask(agent, system, user, schema_cls):
-        cap = llm.call(model=ctx.quick_model,
-                       messages=_msgs(system, user),
-                       agent=agent, stage=STAGE, seq=ctx.next_seq())
-        calls.append(cap)
-        if ctx.sink:
-            ctx.sink.on_call(cap)
-        return schema_cls.model_validate(cap.json_text())
+        return ask_validated(
+            ctx, llm, agent=agent, stage=STAGE, system=system,
+            user=user, validate=schema_cls.model_validate,
+            schema_json=json.dumps(schema_cls.model_json_schema()),
+            calls=calls)
 
     cards = {}
     for key, agent, lens, lens_rules in LENSES:

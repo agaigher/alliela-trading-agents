@@ -12,6 +12,7 @@ import json
 
 from alliela.documents import (PreMortemReview, Thesis, debate_doc_html,
                                transcript_html)
+from alliela.structured import ask_validated
 
 STAGE = "Thesis Desk"
 ROUNDS = 3
@@ -91,12 +92,15 @@ def run_thesis(ctx, llm, brief, reports):
         "matching:\n" + json.dumps(Thesis.model_json_schema(),
                                    indent=1))
     transcript_text = "\n\n".join(f"[{s}]\n{t}" for s, t in turns)
-    cap = call_text(
-        "Research Manager", manager_system,
-        f"As-of date: {ctx.trade_date}.\n\nThe evidence:\n\n{evidence}"
-        f"\n\nThe full debate:\n\n{transcript_text}",
-        reasoning={"max_tokens": 2048})
-    thesis = Thesis.model_validate(cap.json_text())
+    thesis = ask_validated(
+        ctx, llm, agent="Research Manager", stage=STAGE,
+        system=manager_system,
+        user=(f"As-of date: {ctx.trade_date}.\n\nThe evidence:\n\n"
+              f"{evidence}\n\nThe full debate:\n\n{transcript_text}"),
+        validate=Thesis.model_validate,
+        schema_json=json.dumps(Thesis.model_json_schema()),
+        model=ctx.deep_model, reasoning={"max_tokens": 2048},
+        calls=calls)
 
     # 8: Pre-mortem (deep reasoning) — prospective hindsight
     premortem_system = (
@@ -108,12 +112,15 @@ def run_thesis(ctx, llm, brief, reports):
         "would have shown it first. Return STRICT JSON only, matching:"
         "\n" + json.dumps(PreMortemReview.model_json_schema(),
                           indent=1))
-    cap = call_text(
-        "Pre-mortem", premortem_system,
-        f"The Thesis:\n{thesis.model_dump_json(indent=1)}\n\n"
-        f"The evidence:\n\n{evidence}",
-        reasoning={"max_tokens": 2048})
-    premortem = PreMortemReview.model_validate(cap.json_text())
+    premortem = ask_validated(
+        ctx, llm, agent="Pre-mortem", stage=STAGE,
+        system=premortem_system,
+        user=(f"The Thesis:\n{thesis.model_dump_json(indent=1)}\n\n"
+              f"The evidence:\n\n{evidence}"),
+        validate=PreMortemReview.model_validate,
+        schema_json=json.dumps(PreMortemReview.model_json_schema()),
+        model=ctx.deep_model, reasoning={"max_tokens": 2048},
+        calls=calls)
 
     bull_turns = [t for s, t in turns if s == "Bull"]
     bear_turns = [t for s, t in turns if s == "Bear"]
