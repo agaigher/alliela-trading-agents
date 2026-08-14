@@ -121,6 +121,16 @@ vendored yfinance files, registered in `dataflows/interface.py`, wrapped in
 - `get_earnings_calendar(ticker, curr_date)` — dated catalysts: upcoming +
   recent earnings dates with EPS estimates (yfinance).
 
+## Internet tools (decision, Aug 2026)
+
+When agents get open-web search (first consumers: the Retrospective's
+Win/Failure Analysis duties; spec `PERF_WEB_TOOLS` in
+`web/pages/home.py`), the providers are the **Google Search API**
+(primary) with the **DuckDuckGo API** as fallback — not scraping, not
+a headless browser. Same context-pack-or-tool pattern as the existing
+market helpers in `alliela/market.py`; keys live in the deployment
+`.env`, never in this open-source unit.
+
 ## Run telemetry & output archive (requirement)
 
 Binding requirement for the runtime (lands with the `api/` queue worker;
