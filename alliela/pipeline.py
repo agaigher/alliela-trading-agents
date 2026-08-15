@@ -1,12 +1,14 @@
 """Pipeline entry points. Coverage grows tier by tier — currently
-Tiers 01–04 (Idea Generation → Selection Committee → Analyst team →
-Thesis Desk). Each run returns a rollup the runner persists: per-stage
-rows, totals, outcome, and the document list."""
+Tiers 01–05 (Idea Generation → Selection Committee → Analyst team →
+Thesis Desk → Pre-Trade Structuring). Each run returns a rollup the
+runner persists: per-stage rows, totals, outcome, and the document
+list."""
 import time
 
 from alliela.stages.analysts import run_analysts
 from alliela.stages.ideagen import run_ideagen
 from alliela.stages.selection import run_selection
+from alliela.stages.structuring import run_structuring
 from alliela.stages.thesis import run_thesis
 
 
@@ -63,6 +65,16 @@ def run_origination(ctx, llm):
         all_calls += calls
         all_docs += docs
 
+    proposal = None
+    if thesis is not None and thesis.direction != "pass":
+        docs, calls, proposal = run_structuring(ctx, llm, thesis,
+                                                reports)
+        stages.append(_stage_row("Pre-Trade Structuring",
+                                 "Trading Desk", ctx.deep_model,
+                                 calls))
+        all_calls += calls
+        all_docs += docs
+
     tok_in = sum(c.usage.get("prompt_tokens", 0) for c in all_calls)
     tok_out = sum(c.usage.get("completion_tokens", 0) for c in all_calls)
     reasoning = sum(
@@ -73,17 +85,21 @@ def run_origination(ctx, llm):
 
     prefix = f"“{ctx.tip}” → " if ctx.tip else "Free scan → "
     if thesis is not None:
-        d = thesis.direction.lower()
-        if "no position" in d or "pass" in d or "withdrawn" in d:
-            outcome = (prefix + f"{thesis.ticker} judged — conviction "
-                       f"withdrawn at the Thesis Desk "
+        if thesis.direction == "pass":
+            outcome = (prefix + f"{thesis.ticker} judged — PASS at "
+                       f"the Thesis Desk "
                        f"({len(thesis.kill_criteria)} dated re-entry "
                        f"criteria) · {len(all_docs)} docs")
+        elif proposal is not None:
+            outcome = (prefix + f"{thesis.ticker} "
+                       f"{thesis.direction.upper()} proposal — "
+                       f"{proposal.size_pct_nav:g}% NAV staged · "
+                       f"tiers 06–09 not yet built · "
+                       f"{len(all_docs)} docs")
         else:
             outcome = (prefix + f"{thesis.ticker} thesis formed "
                        f"({thesis.direction.upper()}, "
                        f"{len(thesis.kill_criteria)} kill criteria) · "
-                       f"tiers 05–09 not yet built · "
                        f"{len(all_docs)} docs")
     elif brief.viable:
         outcome = (prefix + f"{brief.ticker} selected "

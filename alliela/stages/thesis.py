@@ -87,10 +87,11 @@ def run_thesis(ctx, llm, brief, reports):
         "stance. Kill criteria are the v4 discipline: each one dated "
         "and decidable — when the date arrives, the named data source "
         "answers fired or not fired; 'sentiment deteriorates' is not a "
-        "kill criterion. If the Bear won, say so: direction can flip "
-        "or the conviction can be withdrawn. Return STRICT JSON only, "
-        "matching:\n" + json.dumps(Thesis.model_json_schema(),
-                                   indent=1))
+        "kill criterion. If the Bear won, say so: direction is "
+        "EXACTLY 'long', 'short', or 'pass' — a withheld or deferred "
+        "conviction is 'pass', and the conditions live in stance. "
+        "Return STRICT JSON only, matching:\n"
+        + json.dumps(Thesis.model_json_schema(), indent=1))
     transcript_text = "\n\n".join(f"[{s}]\n{t}" for s, t in turns)
     thesis = ask_validated(
         ctx, llm, agent="Research Manager", stage=STAGE,

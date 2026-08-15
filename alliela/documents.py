@@ -4,6 +4,7 @@ output-format reference. Tier 01 documents for now; each tier adds its
 own as it lands. Every document renders to the site's .doc HTML style
 via to_html()."""
 import html as _html
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -228,7 +229,13 @@ class Thesis(BaseModel):
     summary. The document the fund is named for."""
     ticker: str
     name: str
-    direction: str
+    direction: Literal["long", "short", "pass"] = Field(
+        description="Exactly one of: 'long', 'short', 'pass'. Nuance "
+                    "belongs in stance, never here.")
+    stance: str = Field(description="One sentence of stance nuance — "
+                                    "e.g. conditions for entry on a "
+                                    "pass, conviction level on a "
+                                    "position")
     verdict: str = Field(description="Which side won and why, one "
                                      "paragraph, citing the decisive "
                                      "evidence")
@@ -249,6 +256,7 @@ class Thesis(BaseModel):
             f"<h3>{_e(title)}</h3>"
             f"<h4>{_e(self.ticker)} · {_e(self.name)} — "
             f"{_e(self.direction.upper())}</h4>"
+            f"<p><em>{_e(self.stance)}</em></p>"
             f"<p><strong>Verdict.</strong> {_e(self.verdict)}</p>"
             f"<p>{_e(self.thesis)}</p>"
             f"<p><strong>Path.</strong> {_e(self.path)}</p>"
@@ -298,6 +306,70 @@ class PreMortemReview(BaseModel):
             + "<h4>Monitoring additions</h4><ul>"
             + "".join(f"<li>{_e(m)}</li>"
                       for m in self.monitoring_additions)
+            + "</ul>")
+
+
+class Tranche(BaseModel):
+    portion: str = Field(description="Share of the position, e.g. "
+                                     "'50% (2.0% NAV)'")
+    trigger: str = Field(description="What initiates this tranche")
+    limit: str = Field(description="Limit price / discipline")
+
+
+class TransactionProposal(BaseModel):
+    """Pre-Trade Structuring's handoff — forks to the Risk panel AND
+    directly to the PM (who reads the original, not risk's
+    paraphrase)."""
+    ticker: str
+    name: str
+    direction: Literal["long", "short"]
+    size_pct_nav: float = Field(description="Proposed total position, "
+                                            "% of NAV")
+    entry_plan: list[Tranche]
+    participation_note: str = Field(
+        description="Order size vs average daily value traded — cite "
+                    "the verified ADV number")
+    stop: str = Field(description="Hard stop level + its basis")
+    standing_orders: list[str]
+    short_borrow: str = Field(
+        description="Borrow-realism check. For shorts: borrowable at "
+                    "size per the Positioning report's data, borrow "
+                    "cost charged against expected P&L. For longs: "
+                    "'n/a — long' plus a one-line for-the-record note.")
+    expected_costs: str = Field(description="Slippage / borrow / "
+                                            "hedging cost estimate")
+    timeline: str = Field(description="Execution window and pacing")
+    open_questions_for_risk: list[str] = Field(
+        description="What the Risk panel should stress first")
+
+    def to_html(self, title):
+        tranches = "".join(
+            f"<tr><td>{_e(t.portion)}</td><td>{_e(t.trigger)}</td>"
+            f"<td>{_e(t.limit)}</td></tr>" for t in self.entry_plan)
+        return _doc(
+            f"<h3>{_e(title)}</h3>"
+            f"<h4>{_e(self.ticker)} · {_e(self.name)} — "
+            f"{_e(self.direction.upper())} · "
+            f"{self.size_pct_nav:g}% NAV</h4>"
+            "<h4>Entry plan</h4>"
+            "<table><thead><tr><th>Tranche</th><th>Trigger</th>"
+            "<th>Limit</th></tr></thead>"
+            f"<tbody>{tranches}</tbody></table>"
+            f"<p><strong>Participation:</strong> "
+            f"{_e(self.participation_note)}</p>"
+            f"<p><strong>Stop:</strong> {_e(self.stop)}</p>"
+            "<h4>Standing orders</h4><ul>"
+            + "".join(f"<li>{_e(s)}</li>"
+                      for s in self.standing_orders)
+            + "</ul>"
+            + f"<p><strong>Borrow check:</strong> "
+              f"{_e(self.short_borrow)}</p>"
+            + f"<p><strong>Expected costs:</strong> "
+              f"{_e(self.expected_costs)}</p>"
+            + f"<p><strong>Timeline:</strong> {_e(self.timeline)}</p>"
+            + "<h4>Open questions for Risk</h4><ul>"
+            + "".join(f"<li>{_e(q)}</li>"
+                      for q in self.open_questions_for_risk)
             + "</ul>")
 
 

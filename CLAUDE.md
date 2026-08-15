@@ -23,7 +23,13 @@ engine. Two layers live here:
   on the frozen evidence, Research Manager judging into a Thesis with
   dated decidable kill criteria, Pre-mortem in prospective hindsight —
   all on the deep model with extended reasoning archived; conviction
-  can be withdrawn, and was on its first real run).
+  can be withdrawn — direction is an enum (long | short | pass) with
+  nuance in a stance field; Pre-Trade Structuring — one deep call
+  turning a non-pass Thesis into a Transaction Proposal with tranched
+  entry, participation vs verified ADV, stop with basis, and the
+  mandatory borrow-realism check; a pass ends the run at the desk).
+  Every structured call routes through alliela/structured.py
+  (ask_validated: one archived JSON-repair retry).
   Build decisions are recorded in `docs/backend-plan.md` § phase 4.
 - **`tradingagents/` — the vendored TauricResearch framework**, kept as
   the data/tools library (dataflows, discovery tools). Its old
