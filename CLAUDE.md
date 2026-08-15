@@ -27,7 +27,11 @@ engine. Two layers live here:
   nuance in a stance field; Pre-Trade Structuring — one deep call
   turning a non-pass Thesis into a Transaction Proposal with tranched
   entry, participation vs verified ADV, stop with basis, and the
-  mandatory borrow-realism check; a pass ends the run at the desk).
+  mandatory borrow-realism check; a pass ends the run at the desk;
+  Risk panel — three lenses (Liquidity/Concentration/Drawdown) in a
+  sequential debate against the real book, injected by the runner via
+  ctx.book — the engine never reads a database; the Head of Risk signs
+  typed binding RiskConstraints, veto available, extended reasoning).
   Every structured call routes through alliela/structured.py
   (ask_validated: one archived JSON-repair retry).
   Build decisions are recorded in `docs/backend-plan.md` § phase 4.

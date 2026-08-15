@@ -373,6 +373,84 @@ class TransactionProposal(BaseModel):
             + "</ul>")
 
 
+class RiskView(BaseModel):
+    """One risk lens's read of the proposal against the book."""
+    lens: str
+    assessment: str = Field(description="The lens's read, in prose — "
+                                        "respond to prior lenses where "
+                                        "you disagree")
+    stress: str = Field(description="This lens's stress scenario, "
+                                    "quantified where the data allows")
+    concerns: list[str]
+    recommended_constraints: list[str] = Field(
+        description="Concrete, typed constraints this lens would "
+                    "impose")
+    severity: int = Field(ge=1, le=5,
+                          description="1 benign … 5 blocking")
+
+    def to_html(self, title):
+        return _doc(
+            f"<h3>{_e(title)}</h3>"
+            f"<p><strong>Severity {self.severity}/5.</strong> "
+            f"{_e(self.assessment)}</p>"
+            f"<p><strong>Stress:</strong> {_e(self.stress)}</p>"
+            "<h4>Concerns</h4><ul>"
+            + "".join(f"<li>{_e(c)}</li>" for c in self.concerns)
+            + "</ul><h4>Recommended constraints</h4><ul>"
+            + "".join(f"<li>{_e(c)}</li>"
+                      for c in self.recommended_constraints)
+            + "</ul>")
+
+
+class RiskConstraints(BaseModel):
+    """The Head of Risk's signed, typed constraints — binding on the
+    PM. The PortfolioDecision must satisfy each or explicitly
+    escalate."""
+    ticker: str
+    name: str
+    veto: bool = Field(description="True blocks the trade outright")
+    veto_reason: str = Field(description="Required when veto is true; "
+                                         "'' otherwise")
+    max_position_pct_nav: float = Field(
+        description="Hard cap on the position, % of NAV")
+    entry_conditions: list[str] = Field(
+        description="Binding pacing/tranche conditions")
+    mandatory_stops: list[str] = Field(
+        description="Stops are mandatory, not advisory — level + basis")
+    standing_orders: list[str]
+    exposure_caps: list[str] = Field(
+        description="Book-level caps this trade must respect, e.g. "
+                    "country gross, sector stacking")
+    event_budget_bp: float = Field(
+        description="Loss budget through the named catalyst, basis "
+                    "points of NAV; 0 if not applicable")
+    monitoring: list[str] = Field(
+        description="What the daily loop must watch for this position")
+    rationale: str = Field(description="Why these numbers — grounded "
+                                       "in the lens views and the book")
+
+    def to_html(self, title):
+        veto = (f"<p><strong>VETO.</strong> {_e(self.veto_reason)}</p>"
+                if self.veto else "")
+        def ul(items):
+            return "<ul>" + "".join(f"<li>{_e(i)}</li>"
+                                    for i in items) + "</ul>"
+        return _doc(
+            f"<h3>{_e(title)}</h3>"
+            f"<h4>{_e(self.ticker)} · {_e(self.name)}</h4>" + veto
+            + f"<p><strong>Max position:</strong> "
+              f"{self.max_position_pct_nav:g}% NAV · "
+              f"<strong>Event budget:</strong> "
+              f"{self.event_budget_bp:g}bp</p>"
+            + "<h4>Entry conditions</h4>" + ul(self.entry_conditions)
+            + "<h4>Mandatory stops</h4>" + ul(self.mandatory_stops)
+            + "<h4>Standing orders</h4>" + ul(self.standing_orders)
+            + "<h4>Exposure caps</h4>" + ul(self.exposure_caps)
+            + "<h4>Monitoring</h4>" + ul(self.monitoring)
+            + f"<p><strong>Rationale.</strong> "
+              f"{_e(self.rationale)}</p>")
+
+
 def debate_doc_html(side, turns):
     """One debater's case — their turns in order."""
     labels = ["Opening", "Rebuttal", "Closing"]

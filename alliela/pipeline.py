@@ -1,12 +1,13 @@
 """Pipeline entry points. Coverage grows tier by tier — currently
-Tiers 01–05 (Idea Generation → Selection Committee → Analyst team →
-Thesis Desk → Pre-Trade Structuring). Each run returns a rollup the
-runner persists: per-stage rows, totals, outcome, and the document
-list."""
+Tiers 01–06 (Idea Generation → Selection Committee → Analyst team →
+Thesis Desk → Pre-Trade Structuring → Risk panel). Each run returns a
+rollup the runner persists: per-stage rows, totals, outcome, and the
+document list."""
 import time
 
 from alliela.stages.analysts import run_analysts
 from alliela.stages.ideagen import run_ideagen
+from alliela.stages.risk import run_risk
 from alliela.stages.selection import run_selection
 from alliela.stages.structuring import run_structuring
 from alliela.stages.thesis import run_thesis
@@ -66,12 +67,20 @@ def run_origination(ctx, llm):
         all_docs += docs
 
     proposal = None
+    constraints = None
     if thesis is not None and thesis.direction != "pass":
         docs, calls, proposal = run_structuring(ctx, llm, thesis,
                                                 reports)
         stages.append(_stage_row("Pre-Trade Structuring",
                                  "Trading Desk", ctx.deep_model,
                                  calls))
+        all_calls += calls
+        all_docs += docs
+
+        docs, calls, constraints = run_risk(ctx, llm, thesis, proposal)
+        stages.append(_stage_row("Risk Panel",
+                                 "3 lenses + Head of Risk",
+                                 ctx.deep_model, calls))
         all_calls += calls
         all_docs += docs
 
@@ -90,11 +99,21 @@ def run_origination(ctx, llm):
                        f"the Thesis Desk "
                        f"({len(thesis.kill_criteria)} dated re-entry "
                        f"criteria) · {len(all_docs)} docs")
+        elif constraints is not None and constraints.veto:
+            outcome = (prefix + f"{thesis.ticker} "
+                       f"{thesis.direction.upper()} proposal VETOED "
+                       f"by the Head of Risk · {len(all_docs)} docs")
+        elif constraints is not None:
+            outcome = (prefix + f"{thesis.ticker} "
+                       f"{thesis.direction.upper()} — RiskConstraints "
+                       f"signed (cap "
+                       f"{constraints.max_position_pct_nav:g}% NAV) · "
+                       f"tiers 07–09 not yet built · "
+                       f"{len(all_docs)} docs")
         elif proposal is not None:
             outcome = (prefix + f"{thesis.ticker} "
                        f"{thesis.direction.upper()} proposal — "
                        f"{proposal.size_pct_nav:g}% NAV staged · "
-                       f"tiers 06–09 not yet built · "
                        f"{len(all_docs)} docs")
         else:
             outcome = (prefix + f"{thesis.ticker} thesis formed "

@@ -13,6 +13,9 @@ class RunContext:
     tip: str                     # standing theme instruction ('' = free)
     trade_date: str              # YYYY-MM-DD as-of
     sink: object = None          # sinks protocol
+    # the current book (position dicts), injected by the runner — the
+    # engine never reads a database itself. Empty list = empty book.
+    book: list = field(default_factory=list)
     quick_model: str = "anthropic/claude-haiku-4.5"
     deep_model: str = "anthropic/claude-sonnet-5"
     seq: int = field(default=0)
