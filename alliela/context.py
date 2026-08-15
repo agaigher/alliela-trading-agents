@@ -18,6 +18,7 @@ class RunContext:
     book: list = field(default_factory=list)
     quick_model: str = "anthropic/claude-haiku-4.5"
     deep_model: str = "anthropic/claude-sonnet-5"
+    pm_model: str = "anthropic/claude-opus-5"   # PM decisions only
     seq: int = field(default=0)
 
     def next_seq(self):

@@ -31,7 +31,17 @@ engine. Two layers live here:
   Risk panel — three lenses (Liquidity/Concentration/Drawdown) in a
   sequential debate against the real book, injected by the runner via
   ctx.book — the engine never reads a database; the Head of Risk signs
-  typed binding RiskConstraints, veto available, extended reasoning).
+  typed binding RiskConstraints, veto available, extended reasoning;
+  PM column — Decision (Opus, must address every constraint or
+  escalate — one bounce-back round with the Head of Risk), Funding
+  (cash first, then lowest-conviction trims), Instruction (binds all
+  into the Dealing Instruction); Compliance gate — deterministic rule
+  code in alliela/compliance.py, NO LLM, typed mandate limits checked
+  against the book, N/E rules reported never skipped; Execution —
+  paper fills at verified snapshot prices, paced legs deferred
+  honestly. The rollup returns fills + position context; the WORKER
+  applies them to the positions table — the only PMS write, never the
+  engine). **Origination is fully built, tiers 01–09.**
   Every structured call routes through alliela/structured.py
   (ask_validated: one archived JSON-repair retry).
   Build decisions are recorded in `docs/backend-plan.md` § phase 4.

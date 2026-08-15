@@ -1,12 +1,17 @@
-"""Pipeline entry points. Coverage grows tier by tier — currently
-Tiers 01–06 (Idea Generation → Selection Committee → Analyst team →
-Thesis Desk → Pre-Trade Structuring → Risk panel). Each run returns a
-rollup the runner persists: per-stage rows, totals, outcome, and the
-document list."""
+"""Pipeline entry points. Full origination coverage — Tiers 01–09
+(Idea Generation → Selection → Analysts → Thesis Desk → Structuring →
+Risk panel → PM (Decision·Funding·Instruction) → Compliance gate →
+Execution). Each run returns a rollup the runner persists: per-stage
+rows, totals, outcome, documents, and — when Execution fills — the
+fills for the runner to write to the PMS (the only PMS write)."""
 import time
 
+from alliela.compliance import check_instruction
+from alliela.documents import compliance_record_html
 from alliela.stages.analysts import run_analysts
+from alliela.stages.execution import run_execution
 from alliela.stages.ideagen import run_ideagen
+from alliela.stages.pm import run_pm
 from alliela.stages.risk import run_risk
 from alliela.stages.selection import run_selection
 from alliela.stages.structuring import run_structuring
@@ -84,6 +89,40 @@ def run_origination(ctx, llm):
         all_calls += calls
         all_docs += docs
 
+    decision = funding = instruction = report = None
+    compliance_passed = None
+    if constraints is not None and not constraints.veto:
+        docs, calls, decision, funding, instruction = run_pm(
+            ctx, llm, thesis, proposal, constraints)
+        stages.append(_stage_row("Portfolio Manager",
+                                 "Decision · Funding · Instruction",
+                                 ctx.pm_model, calls))
+        all_calls += calls
+        all_docs += docs
+
+    if instruction is not None:
+        # Compliance gate — deterministic, no LLM, 0 calls
+        checks, compliance_passed = check_instruction(
+            instruction, decision, constraints, ctx.book, funding)
+        record = compliance_record_html(checks, compliance_passed)
+        doc = ("compliance-record", "Compliance Record", "output",
+               record, {"agent": "Compliance (rule engine)",
+                        "stage": "Compliance",
+                        "structured": {"checks": checks,
+                                       "passed": compliance_passed}})
+        all_docs.append(doc)
+        if ctx.sink:
+            ctx.sink.on_document(*doc)
+        stages.append(["Compliance", "rule engine — no LLM", "—", 0,
+                       "—", "—", "—", "$0.00"])
+
+        if compliance_passed:
+            docs, calls, report = run_execution(ctx, llm, instruction)
+            stages.append(_stage_row("Execution", "Trading Desk",
+                                     ctx.quick_model, calls))
+            all_calls += calls
+            all_docs += docs
+
     tok_in = sum(c.usage.get("prompt_tokens", 0) for c in all_calls)
     tok_out = sum(c.usage.get("completion_tokens", 0) for c in all_calls)
     reasoning = sum(
@@ -103,12 +142,27 @@ def run_origination(ctx, llm):
             outcome = (prefix + f"{thesis.ticker} "
                        f"{thesis.direction.upper()} proposal VETOED "
                        f"by the Head of Risk · {len(all_docs)} docs")
+        elif report is not None:
+            filled = sum(f.size_pct_nav for f in report.fills
+                         if f.purpose == "entry")
+            outcome = (prefix + f"{thesis.ticker} "
+                       f"{decision.action.upper()} "
+                       f"{decision.size_pct_nav:g}% NAV · tranche 1 "
+                       f"filled ({filled:g}%) · FULL PIPELINE · "
+                       f"{len(all_docs)} docs")
+        elif compliance_passed is False:
+            outcome = (prefix + f"{thesis.ticker} — Compliance FAILED "
+                       f"the Dealing Instruction; decision returned · "
+                       f"{len(all_docs)} docs")
+        elif decision is not None and decision.action == "decline":
+            outcome = (prefix + f"{thesis.ticker} — PM DECLINED "
+                       f"(no-trade, first-class outcome) · "
+                       f"{len(all_docs)} docs")
         elif constraints is not None:
             outcome = (prefix + f"{thesis.ticker} "
                        f"{thesis.direction.upper()} — RiskConstraints "
                        f"signed (cap "
                        f"{constraints.max_position_pct_nav:g}% NAV) · "
-                       f"tiers 07–09 not yet built · "
                        f"{len(all_docs)} docs")
         elif proposal is not None:
             outcome = (prefix + f"{thesis.ticker} "
@@ -140,6 +194,20 @@ def run_origination(ctx, llm):
         "stages": stages,
         "documents": [{"key": k, "title": t}
                       for k, t, *_ in all_docs],
+        # the runner writes these to the PMS — the only PMS write
+        "fills": ([f.model_dump() for f in report.fills]
+                  if report is not None else []),
+        "position_context": ({
+            "ticker": thesis.ticker,
+            "name": thesis.name,
+            "direction": "L" if thesis.direction == "long" else "S",
+            "stop": (constraints.mandatory_stops[0]
+                     if constraints and constraints.mandatory_stops
+                     else ""),
+            "kill_note": (f"0 fired · next "
+                          f"{thesis.kill_criteria[0].date}"
+                          if thesis.kill_criteria else ""),
+        } if report is not None else None),
     }
     if ctx.sink:
         ctx.sink.finalize(rollup)

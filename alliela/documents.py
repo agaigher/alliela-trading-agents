@@ -451,6 +451,182 @@ class RiskConstraints(BaseModel):
               f"{_e(self.rationale)}</p>")
 
 
+class ComplianceItem(BaseModel):
+    constraint: str = Field(description="The RiskConstraint addressed, "
+                                        "quoted or tightly paraphrased")
+    status: Literal["satisfied", "escalated"]
+    note: str = Field(description="How it is satisfied, or why it is "
+                                  "escalated to the Head of Risk")
+
+
+class PortfolioDecision(BaseModel):
+    """The PM's decision. Must address every RiskConstraint —
+    satisfied or explicitly escalated (escalation triggers one PM ↔
+    Head of Risk bounce-back round)."""
+    ticker: str
+    name: str
+    action: Literal["buy", "sell", "decline"]
+    size_pct_nav: float = Field(description="Decided size, % NAV — "
+                                            "0 when declining")
+    rationale: str = Field(description="The decision's reasoning "
+                                       "against thesis, proposal, "
+                                       "constraints, and the book")
+    compliance: list[ComplianceItem] = Field(
+        description="One item per RiskConstraint — none may be "
+                    "silently ignored")
+    conditions: list[str] = Field(
+        description="Conditions the PM attaches beyond the constraints")
+
+    def to_html(self, title):
+        comp = "".join(
+            f"<tr><td>{_e(c.constraint)}</td>"
+            f"<td>{'✓' if c.status == 'satisfied' else 'ESCALATED'}"
+            f"</td><td>{_e(c.note)}</td></tr>"
+            for c in self.compliance)
+        return _doc(
+            f"<h3>{_e(title)}</h3>"
+            f"<h4>{_e(self.ticker)} · {_e(self.name)} — "
+            f"{_e(self.action.upper())}"
+            + (f" · {self.size_pct_nav:g}% NAV"
+               if self.action != "decline" else "") + "</h4>"
+            f"<p>{_e(self.rationale)}</p>"
+            "<h4>Compliance vs RiskConstraints</h4>"
+            "<table><thead><tr><th>Constraint</th><th>Status</th>"
+            "<th>Note</th></tr></thead>"
+            f"<tbody>{comp}</tbody></table>"
+            "<h4>PM conditions</h4><ul>"
+            + "".join(f"<li>{_e(c)}</li>" for c in self.conditions)
+            + "</ul>")
+
+
+class FundingSource(BaseModel):
+    source: Literal["cash", "trim"]
+    ticker: str = Field(description="'' for cash")
+    amount_pct_nav: float
+    rationale: str = Field(description="For trims: why this holding — "
+                                       "conviction rank, thesis state")
+
+
+class FundingPlan(BaseModel):
+    """PM duty: portfolio construction — make room. Cash first, then
+    trim lowest-conviction holdings. Grounded in the real book."""
+    target_pct_nav: float = Field(description="Room to make, % NAV")
+    sources: list[FundingSource]
+    resulting_cash_pct: float = Field(
+        description="Cash after funding — must respect the 1% floor")
+    notes: str
+
+    def to_html(self, title):
+        rows = "".join(
+            f"<tr><td>{_e(s.source)}</td><td>{_e(s.ticker) or '—'}</td>"
+            f"<td>{s.amount_pct_nav:g}%</td><td>{_e(s.rationale)}</td>"
+            f"</tr>" for s in self.sources)
+        return _doc(
+            f"<h3>{_e(title)}</h3>"
+            f"<p>Room required: <strong>{self.target_pct_nav:g}% "
+            f"NAV</strong> · cash after funding: "
+            f"<strong>{self.resulting_cash_pct:g}%</strong></p>"
+            "<table><thead><tr><th>Source</th><th>Ticker</th>"
+            "<th>% NAV</th><th>Rationale</th></tr></thead>"
+            f"<tbody>{rows}</tbody></table>"
+            f"<p>{_e(self.notes)}</p>")
+
+
+class InstructionLeg(BaseModel):
+    ticker: str
+    side: Literal["buy", "sell"]
+    size_pct_nav: float
+    purpose: Literal["entry", "funding_trim", "hedge"]
+    pacing: str = Field(description="Limit/pacing discipline for the "
+                                    "desk")
+
+
+class DealingInstruction(BaseModel):
+    """PM - Instruction: binds the decision + funding plan into the
+    stage's handoff document. The Compliance gate checks THIS at order
+    release."""
+    legs: list[InstructionLeg]
+    stops_to_place: list[str]
+    standing_orders: list[str]
+    validity: str = Field(description="Execution window")
+    notes: str
+
+    def to_html(self, title):
+        rows = "".join(
+            f"<tr><td>{_e(l.ticker)}</td><td>{_e(l.side.upper())}</td>"
+            f"<td>{l.size_pct_nav:g}%</td><td>{_e(l.purpose)}</td>"
+            f"<td>{_e(l.pacing)}</td></tr>" for l in self.legs)
+        def ul(items):
+            return "<ul>" + "".join(f"<li>{_e(i)}</li>"
+                                    for i in items) + "</ul>"
+        return _doc(
+            f"<h3>{_e(title)}</h3>"
+            "<table><thead><tr><th>Ticker</th><th>Side</th>"
+            "<th>% NAV</th><th>Purpose</th><th>Pacing</th></tr>"
+            f"</thead><tbody>{rows}</tbody></table>"
+            "<h4>Stops to place</h4>" + ul(self.stops_to_place)
+            + "<h4>Standing orders</h4>" + ul(self.standing_orders)
+            + f"<p><strong>Validity:</strong> {_e(self.validity)} · "
+              f"{_e(self.notes)}</p>")
+
+
+class Fill(BaseModel):
+    ticker: str
+    side: Literal["buy", "sell"]
+    size_pct_nav: float
+    purpose: Literal["entry", "funding_trim", "hedge"]
+    fill_price: str = Field(description="Currency-formatted, from the "
+                                        "verified snapshot")
+    slippage_note: str
+
+
+class ExecutionReport(BaseModel):
+    """Trading Desk duty #2 — what was actually done. The fills are
+    the only thing that ever writes to the PMS."""
+    fills: list[Fill]
+    unfilled: list[str] = Field(description="Legs resting/deferred and "
+                                            "why")
+    stops_placed: list[str]
+    market_note: str
+
+    def to_html(self, title):
+        rows = "".join(
+            f"<tr><td>{_e(f.ticker)}</td><td>{_e(f.side.upper())}</td>"
+            f"<td>{f.size_pct_nav:g}%</td><td>{_e(f.purpose)}</td>"
+            f"<td>{_e(f.fill_price)}</td><td>{_e(f.slippage_note)}</td>"
+            f"</tr>" for f in self.fills)
+        return _doc(
+            f"<h3>{_e(title)}</h3>"
+            "<table><thead><tr><th>Ticker</th><th>Side</th><th>% NAV"
+            "</th><th>Purpose</th><th>Fill</th><th>Slippage</th></tr>"
+            f"</thead><tbody>{rows}</tbody></table>"
+            "<h4>Unfilled / resting</h4><ul>"
+            + "".join(f"<li>{_e(u)}</li>" for u in self.unfilled)
+            + "</ul><h4>Stops placed</h4><ul>"
+            + "".join(f"<li>{_e(s)}</li>" for s in self.stops_placed)
+            + f"</ul><p>{_e(self.market_note)}</p>")
+
+
+def compliance_record_html(checks, passed):
+    """The Compliance gate's record — deterministic, no LLM."""
+    rows = "".join(
+        f"<tr><td>{_e(c['rule'])}</td>"
+        f"<td>{_e(c['observed'])}</td>"
+        f"<td>{'PASS' if c['ok'] else ('N/E' if c['ok'] is None else 'FAIL')}</td></tr>"
+        for c in checks)
+    verdict = "RELEASED" if passed else "RETURNED TO PM - DECISION"
+    return _doc(
+        "<h3>Compliance Record</h3>"
+        "<p><em>Deterministic rule check of the Dealing Instruction "
+        "against the mandate's typed restrictions and the book at "
+        "order release — no judgment, no waivers. N/E = not "
+        "mechanically evaluable yet.</em></p>"
+        "<table><thead><tr><th>Rule</th><th>Observed</th>"
+        "<th>Result</th></tr></thead>"
+        f"<tbody>{rows}</tbody></table>"
+        f"<p><strong>Verdict: {verdict}</strong></p>")
+
+
 def debate_doc_html(side, turns):
     """One debater's case — their turns in order."""
     labels = ["Opening", "Rebuttal", "Closing"]
