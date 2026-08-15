@@ -607,6 +607,172 @@ class ExecutionReport(BaseModel):
             + f"</ul><p>{_e(self.market_note)}</p>")
 
 
+class MarketContextBrief(BaseModel):
+    """Daily book-level read of the outside world — one pass, whole
+    book. Also feeds P&L attribution (factor context)."""
+    regime: str = Field(description="The market regime in two or "
+                                    "three sentences, from the "
+                                    "injected data")
+    factors: list[str] = Field(description="Factor/sector moves that "
+                                           "touch the book, dated")
+    watch: list[str] = Field(description="What today could bring")
+
+    def to_html(self, title):
+        return _doc(
+            f"<h3>{_e(title)}</h3><p>{_e(self.regime)}</p>"
+            "<h4>Factors touching the book</h4><ul>"
+            + "".join(f"<li>{_e(f)}</li>" for f in self.factors)
+            + "</ul><h4>Watch</h4><ul>"
+            + "".join(f"<li>{_e(w)}</li>" for w in self.watch)
+            + "</ul>")
+
+
+class DailyRiskReport(BaseModel):
+    """The three origination risk lenses re-checked daily, plus the
+    squeeze watch on shorts. One risk language with origination."""
+    liquidity: str
+    concentration: str
+    drawdown: str
+    squeeze_watch: str = Field(description="Days-to-cover / borrow "
+                                           "state on every short")
+    breaches: list[str] = Field(description="Limits breached or "
+                                            "approaching; empty is an "
+                                            "acceptable answer")
+
+    def to_html(self, title):
+        return _doc(
+            f"<h3>{_e(title)}</h3>"
+            f"<p><strong>Liquidity.</strong> {_e(self.liquidity)}</p>"
+            f"<p><strong>Concentration.</strong> "
+            f"{_e(self.concentration)}</p>"
+            f"<p><strong>Drawdown.</strong> {_e(self.drawdown)}</p>"
+            f"<p><strong>Squeeze watch.</strong> "
+            f"{_e(self.squeeze_watch)}</p>"
+            "<h4>Breaches</h4><ul>"
+            + ("".join(f"<li>{_e(b)}</li>" for b in self.breaches)
+               or "<li>none</li>") + "</ul>")
+
+
+class ThesisCheckResult(BaseModel):
+    """One position's kill criteria evaluated — decidable, not vibes.
+    'undecidable' is an honest verdict when the thesis data is too
+    thin to evaluate (and a process gap to report)."""
+    ticker: str
+    status: Literal["fired", "approaching", "not_fired", "undecidable"]
+    note: str = Field(description="Which criterion, what data decided "
+                                  "it, or why it cannot be decided")
+
+
+class PnLRow(BaseModel):
+    ticker: str
+    note: str = Field(description="Move vs THESIS EXPECTATION, never "
+                                  "raw P&L — entry price is sunk")
+
+
+class PnLAttribution(BaseModel):
+    book_note: str
+    rows: list[PnLRow]
+
+    def to_html(self, title):
+        rows = "".join(f"<tr><td>{_e(r.ticker)}</td>"
+                       f"<td>{_e(r.note)}</td></tr>"
+                       for r in self.rows)
+        return _doc(f"<h3>{_e(title)}</h3><p>{_e(self.book_note)}</p>"
+                    "<table><thead><tr><th>Ticker</th><th>vs thesis "
+                    "expectation</th></tr></thead>"
+                    f"<tbody>{rows}</tbody></table>")
+
+
+class PositionVerdict(BaseModel):
+    """The PM's per-position call: Hold · Add · Trim · Exit — quick
+    think, cannot originate names; Adds beyond threshold escalate to
+    origination instead."""
+    ticker: str
+    verdict: Literal["hold", "add", "trim", "exit", "escalate"]
+    size_change_pct_nav: float = Field(
+        description="0 for hold/escalate; the change for add/trim; "
+                    "the full weight for exit")
+    rationale: str = Field(description="Two sentences max, citing the "
+                                       "duty reports")
+    thesis_amendment: str = Field(
+        description="Appended to the thesis file; '' when none")
+
+
+class RebalanceLeg(BaseModel):
+    ticker: str
+    side: Literal["buy", "sell"]
+    size_pct_nav: float
+    reason: str
+    pacing: str
+
+
+class DailyPortfolioNote(BaseModel):
+    """Portfolio Review — the loop's only deep-think call. Overrides
+    verdicts the portfolio disagrees with, owns drawdown-state rules
+    and gross/net/cash targets, binds the Rebalance Instruction, and
+    may fire the re-underwrite / new-idea trigger toward
+    origination."""
+    summary: str
+    overrides: list[str] = Field(description="Position verdicts "
+                                             "overridden and why; "
+                                             "empty is fine")
+    drawdown_state: str
+    targets_note: str = Field(description="Gross/net/cash vs targets")
+    rebalance: list[RebalanceLeg] = Field(
+        description="Empty list = no instruction today")
+    reunderwrite_triggers: list[str] = Field(
+        description="Signals sent back toward origination")
+
+    def to_html(self, title):
+        legs = "".join(
+            f"<tr><td>{_e(l.ticker)}</td><td>{_e(l.side.upper())}</td>"
+            f"<td>{l.size_pct_nav:g}%</td><td>{_e(l.reason)}</td>"
+            f"<td>{_e(l.pacing)}</td></tr>" for l in self.rebalance)
+        def ul(items):
+            return ("<ul>" + "".join(f"<li>{_e(i)}</li>"
+                                     for i in items) + "</ul>"
+                    if items else "<ul><li>none</li></ul>")
+        return _doc(
+            f"<h3>{_e(title)}</h3><p>{_e(self.summary)}</p>"
+            f"<p><strong>Drawdown state.</strong> "
+            f"{_e(self.drawdown_state)}</p>"
+            f"<p><strong>Targets.</strong> {_e(self.targets_note)}</p>"
+            "<h4>Overrides</h4>" + ul(self.overrides)
+            + "<h4>Rebalance</h4>"
+            + (("<table><thead><tr><th>Ticker</th><th>Side</th>"
+                "<th>% NAV</th><th>Reason</th><th>Pacing</th></tr>"
+                f"</thead><tbody>{legs}</tbody></table>")
+               if self.rebalance else "<p>No rebalance today.</p>")
+            + "<h4>Re-underwrite triggers</h4>"
+            + ul(self.reunderwrite_triggers))
+
+
+def thesis_sheet_html(title, checks):
+    """Thesis Status Sheet — the 16 per-position checks, one doc."""
+    rows = "".join(
+        f"<tr><td>{_e(c.ticker)}</td>"
+        f"<td>{_e(c.status.upper().replace('_', ' '))}</td>"
+        f"<td>{_e(c.note)}</td></tr>" for c in checks)
+    return _doc(f"<h3>{_e(title)}</h3>"
+                "<table><thead><tr><th>Ticker</th><th>Status</th>"
+                "<th>Note</th></tr></thead>"
+                f"<tbody>{rows}</tbody></table>")
+
+
+def verdicts_html(title, verdicts):
+    """Position Verdicts — the per-position calls, one doc."""
+    rows = "".join(
+        f"<tr><td>{_e(v.ticker)}</td><td>{_e(v.verdict.upper())}</td>"
+        f"<td>{v.size_change_pct_nav:g}%</td><td>{_e(v.rationale)}</td>"
+        f"<td>{_e(v.thesis_amendment) or '—'}</td></tr>"
+        for v in verdicts)
+    return _doc(f"<h3>{_e(title)}</h3>"
+                "<table><thead><tr><th>Ticker</th><th>Verdict</th>"
+                "<th>Δ % NAV</th><th>Rationale</th>"
+                "<th>Thesis amendment</th></tr></thead>"
+                f"<tbody>{rows}</tbody></table>")
+
+
 class PositionScore(BaseModel):
     ticker: str
     classification: Literal["worked", "failed", "inconclusive",

@@ -17,6 +17,11 @@ MAX_GROSS_SHORT_PCT = 20.0
 MAX_SINGLE_SHORT_PCT = 5.0
 CASH_FLOOR_PCT = 1.0
 
+# Daily-loop guardrails (the loop executes discipline, it does not
+# deliberate — anything bigger reroutes through origination)
+MAX_DAILY_TURNOVER_PCT = 10.0         # sum of legs per day
+MAX_SIZE_CHANGE_PCT = 2.0             # per name without re-underwrite
+
 JAPAN_SUFFIX = ".T"
 
 
@@ -100,6 +105,57 @@ def check_instruction(instruction, decision, constraints, book,
     add("Top-5 concentration ≤ 65% at market", "needs marked prices",
         None)
     add("1-day 95% VaR ≤ 2.5%", "needs a risk model", None)
+
+    passed = all(c["ok"] is not False for c in checks)
+    return checks, passed
+
+
+def check_daily(legs, book):
+    """The daily-loop compliance gate: mandate rules + loop guardrails
+    on the Rebalance Instruction's legs. Deterministic, no LLM; FAIL
+    bounces the note back to Portfolio Review."""
+    checks = []
+
+    def add(rule, observed, ok):
+        checks.append({"rule": rule, "observed": observed, "ok": ok})
+
+    tickers_in_book = {p["ticker"] for p in book}
+    weights = {p["ticker"]: float(p["weight_pct"]) for p in book}
+
+    turnover = sum(l.size_pct_nav for l in legs)
+    add(f"Loop guardrail: daily turnover ≤ {MAX_DAILY_TURNOVER_PCT:g}%",
+        f"{turnover:g}%", turnover <= MAX_DAILY_TURNOVER_PCT)
+
+    new_names = [l.ticker for l in legs
+                 if l.ticker not in tickers_in_book]
+    add("Loop guardrail: no new names (origination owns entries)",
+        f"new: {new_names or 'none'}", not new_names)
+
+    oversize = [l.ticker for l in legs
+                if l.size_pct_nav > MAX_SIZE_CHANGE_PCT]
+    add(f"Loop guardrail: size change ≤ {MAX_SIZE_CHANGE_PCT:g}% per "
+        f"name without re-underwrite",
+        f"over: {oversize or 'none'}", not oversize)
+
+    for l in legs:
+        if l.side == "sell" and l.ticker in weights \
+                and weights[l.ticker] > 0:
+            if l.size_pct_nav > weights[l.ticker] + 1e-9:
+                add("Sells cannot exceed the held weight",
+                    f"{l.ticker}: sell {l.size_pct_nav:g}% vs held "
+                    f"{weights[l.ticker]:g}%", False)
+
+    shorts_after = {}
+    for p in book:
+        if p["direction"] == "S":
+            shorts_after[p["ticker"]] = abs(float(p["weight_pct"]))
+    for l in legs:
+        if l.side == "sell" and shorts_after.get(l.ticker) is not None:
+            shorts_after[l.ticker] += l.size_pct_nav
+    gross_short = sum(shorts_after.values())
+    add(f"Mandate gross short ≤ {MAX_GROSS_SHORT_PCT:g}%",
+        f"≈ {gross_short:.1f}% after legs",
+        gross_short <= MAX_GROSS_SHORT_PCT)
 
     passed = all(c["ok"] is not False for c in checks)
     return checks, passed

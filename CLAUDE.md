@@ -41,7 +41,13 @@ engine. Two layers live here:
   paper fills at verified snapshot prices, paced legs deferred
   honestly. The rollup returns fills + position context; the WORKER
   applies them to the positions table — the only PMS write, never the
-  engine). **Origination is fully built, tiers 01–09.**
+  engine). **Origination is fully built, tiers 01–09.** The DAILY LOOP
+  (stages/daily.py: intelligence duties → per-position verdicts →
+  deep-think Portfolio Review → daily gate in compliance.check_daily →
+  Execution) and the RETROSPECTIVE (stages/retrospective.py:
+  Scorekeeper → Attribution → 3-lens Process Audit reading actual
+  prompts + archived traces → Head of PR → Improvement Backlog) are
+  built — all three flows now execute for real.
   Every structured call routes through alliela/structured.py
   (ask_validated: one archived JSON-repair retry).
   Build decisions are recorded in `docs/backend-plan.md` § phase 4.

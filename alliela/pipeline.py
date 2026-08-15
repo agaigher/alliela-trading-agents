@@ -257,3 +257,109 @@ def run_retrospective(ctx, llm):
     if ctx.sink:
         ctx.sink.finalize(rollup)
     return rollup
+
+
+def run_daily_loop(ctx, llm):
+    """Execute the daily Portfolio Management loop. Rebalance legs (if
+    any) pass the deterministic daily gate, then Execution turns them
+    into fills for the runner's PMS write."""
+    from alliela.compliance import check_daily
+    from alliela.documents import (DealingInstruction, InstructionLeg,
+                                   compliance_record_html)
+    from alliela.stages.daily import run_daily
+    from alliela.stages.execution import run_execution
+
+    started = time.monotonic()
+    stages, all_calls, all_docs = [], [], []
+
+    docs, intel, verdicts_calls, review, note = run_daily(ctx, llm)
+    n_pos = len(ctx.book or [])
+    stages.append(_stage_row(
+        "Intelligence Duties",
+        f"Mkt Context · Risk · {n_pos} Thesis Checks · P&L",
+        ctx.quick_model, intel))
+    stages.append(_stage_row("Position Verdicts", f"PM × {n_pos}",
+                             ctx.quick_model, verdicts_calls))
+    stages.append(_stage_row("Portfolio Review", "deep think",
+                             ctx.deep_model, review))
+    all_calls += intel + verdicts_calls + review
+    all_docs += docs
+
+    report = None
+    compliance_passed = None
+    if note.rebalance:
+        checks, compliance_passed = check_daily(note.rebalance,
+                                                ctx.book or [])
+        record = compliance_record_html(checks, compliance_passed)
+        doc = ("compliance-record", "Compliance Record", "output",
+               record, {"agent": "Compliance (rule engine)",
+                        "stage": "Compliance",
+                        "structured": {"checks": checks,
+                                       "passed": compliance_passed}})
+        all_docs.append(doc)
+        if ctx.sink:
+            ctx.sink.on_document(*doc)
+        stages.append(["Compliance", "rule engine — no LLM", "—", 0,
+                       "—", "—", "—", "$0.00"])
+        if compliance_passed:
+            instruction = DealingInstruction(
+                legs=[InstructionLeg(
+                    ticker=l.ticker, side=l.side,
+                    size_pct_nav=l.size_pct_nav,
+                    purpose="entry" if l.side == "buy"
+                    else "funding_trim",
+                    pacing=l.pacing) for l in note.rebalance],
+                stops_to_place=[], standing_orders=[],
+                validity="today", notes="daily rebalance")
+            docs, calls, report = run_execution(ctx, llm, instruction)
+            stages.append(_stage_row("Execution", "Trading Desk",
+                                     ctx.quick_model, calls))
+            all_calls += calls
+            all_docs += docs
+
+    tok_in = sum(c.usage.get("prompt_tokens", 0) for c in all_calls)
+    tok_out = sum(c.usage.get("completion_tokens", 0)
+                  for c in all_calls)
+    reasoning = sum(
+        (c.usage.get("completion_tokens_details") or {})
+        .get("reasoning_tokens", 0) for c in all_calls)
+    cost = sum(c.cost_usd for c in all_calls)
+    elapsed = int(time.monotonic() - started)
+
+    from collections import Counter
+    tally = Counter()
+    for d in all_docs:
+        if d[0] == "position-verdicts":
+            for v in d[4]["structured"]:
+                tally[v["verdict"]] += 1
+    verdict_bits = " · ".join(f"{n} {v.title()}"
+                              for v, n in tally.most_common())
+    if compliance_passed is False:
+        tail = "rebalance FAILED compliance — returned"
+    elif report is not None:
+        tail = f"{len(report.fills)} fill(s)"
+    elif note.rebalance:
+        tail = "rebalance bound"
+    else:
+        tail = "no rebalance"
+    outcome = (f"{n_pos} verdicts — {verdict_bits or 'none'} · {tail}"
+               + (f" · {len(note.reunderwrite_triggers)} re-underwrite "
+                  f"trigger(s)" if note.reunderwrite_triggers else ""))
+
+    rollup = {
+        "outcome": outcome,
+        "calls": len(all_calls),
+        "tokens_in": tok_in,
+        "tokens_out": tok_out,
+        "reasoning_tokens": reasoning,
+        "cost_usd": round(cost, 4),
+        "duration_seconds": elapsed,
+        "stages": stages,
+        "documents": [{"key": k, "title": t} for k, t, *_ in all_docs],
+        "fills": ([f.model_dump() for f in report.fills]
+                  if report is not None else []),
+        "position_context": None,   # daily fills touch existing rows
+    }
+    if ctx.sink:
+        ctx.sink.finalize(rollup)
+    return rollup
