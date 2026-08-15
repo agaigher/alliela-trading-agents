@@ -607,6 +607,163 @@ class ExecutionReport(BaseModel):
             + f"</ul><p>{_e(self.market_note)}</p>")
 
 
+class PositionScore(BaseModel):
+    ticker: str
+    classification: Literal["worked", "failed", "inconclusive",
+                            "no_position"]
+    vs_expectation: str = Field(
+        description="Judged against the thesis expectation, never raw "
+                    "P&L — up can be failed, down can be working")
+
+
+class WeeklyScoreboard(BaseModel):
+    """The Scorekeeper's book-level pass — classification is
+    thesis-relative, and honesty about data status is mandatory."""
+    period: str
+    book_note: str = Field(description="Honest status of the book — "
+                                       "seeded vs real positions")
+    scores: list[PositionScore]
+    run_summary: str = Field(description="The period's runs and their "
+                                         "outcomes, patterns included")
+    forensics_scope: list[str] = Field(
+        description="What goes to full attribution and why")
+
+    def to_html(self, title):
+        rows = "".join(
+            f"<tr><td>{_e(s.ticker)}</td>"
+            f"<td>{_e(s.classification.upper())}</td>"
+            f"<td>{_e(s.vs_expectation)}</td></tr>"
+            for s in self.scores)
+        return _doc(
+            f"<h3>{_e(title)}</h3><p><em>{_e(self.period)}</em></p>"
+            f"<p>{_e(self.book_note)}</p>"
+            "<table><thead><tr><th>Ticker</th><th>Class</th>"
+            "<th>vs expectation</th></tr></thead>"
+            f"<tbody>{rows}</tbody></table>"
+            f"<p><strong>Runs.</strong> {_e(self.run_summary)}</p>"
+            "<h4>Forensics scope</h4><ul>"
+            + "".join(f"<li>{_e(f)}</li>"
+                      for f in self.forensics_scope) + "</ul>")
+
+
+class AttributionReport(BaseModel):
+    """Win/Failure analysis — what actually happened after the
+    decision, judged on dated external facts, then the pivotal split:
+    unknowable at decision time vs knowable but missed."""
+    subject: str
+    post_decision_facts: list[str] = Field(
+        description="Dated facts from the injected packs — real "
+                    "prices, real headlines; nothing remembered")
+    verdict: str = Field(description="Decision quality vs subsequent "
+                                     "reality — right-for-wrong-reason "
+                                     "is flagged, not celebrated")
+    knowable_split: str = Field(
+        description="What was unknowable at decision time vs knowable "
+                    "but missed — the pivotal attribution")
+    to_audit: list[str] = Field(
+        description="Questions the Process Audit panel must answer")
+
+    def to_html(self, title):
+        return _doc(
+            f"<h3>{_e(title)}</h3><h4>{_e(self.subject)}</h4>"
+            "<h4>Post-decision record</h4><ul>"
+            + "".join(f"<li>{_e(f)}</li>"
+                      for f in self.post_decision_facts) + "</ul>"
+            + f"<p><strong>Verdict.</strong> {_e(self.verdict)}</p>"
+            + f"<p><strong>Knowable split.</strong> "
+              f"{_e(self.knowable_split)}</p>"
+            + "<h4>To the audit panel</h4><ul>"
+            + "".join(f"<li>{_e(q)}</li>" for q in self.to_audit)
+            + "</ul>")
+
+
+class AuditFinding(BaseModel):
+    """One Process-Audit lens: findings must link to actual prompts,
+    traces, or structure — never vibes about vibes."""
+    lens: str
+    findings: list[str] = Field(
+        description="Each finding cites its evidence: a prompt line, "
+                    "an archived output, a structural fact")
+    proposed_change: str = Field(
+        description="The minimal change — a prompt diff, a structural "
+                    "adjustment, a tool addition — costed honestly")
+    expected_effect: str
+    risk_of_change: str = Field(
+        description="What this change could break — false-positive "
+                    "cost included")
+
+    def to_html(self, title):
+        return _doc(
+            f"<h3>{_e(title)}</h3>"
+            "<h4>Findings</h4><ul>"
+            + "".join(f"<li>{_e(f)}</li>" for f in self.findings)
+            + "</ul>"
+            + f"<p><strong>Proposed change.</strong> "
+              f"{_e(self.proposed_change)}</p>"
+            + f"<p><strong>Expected effect.</strong> "
+              f"{_e(self.expected_effect)}</p>"
+            + f"<p><strong>Risk.</strong> {_e(self.risk_of_change)}</p>")
+
+
+class BacklogItem(BaseModel):
+    rank: int
+    title: str
+    change: str = Field(description="Concrete, implementable by the "
+                                    "Developer Agent")
+    evidence: str = Field(description="Links back to the audit "
+                                      "findings and attribution")
+    expected_effect: str
+    flow_impact: str = Field(description="What the next flow version "
+                                         "would say about this change")
+
+
+class PerformanceAssessment(BaseModel):
+    """The Head of Performance Review's judgment — aggregates across
+    positions and weeks: one miss is noise, the same gap three weeks
+    running is signal."""
+    period: str
+    summary: str
+    signal_vs_noise: str = Field(
+        description="Which patterns are signal (recurring, evidenced) "
+                    "vs noise (single occurrences)")
+    assessment: str = Field(description="The considered judgment of "
+                                        "the process, in prose")
+
+    def to_html(self, title):
+        return _doc(
+            f"<h3>{_e(title)}</h3><p><em>{_e(self.period)}</em></p>"
+            f"<p><strong>{_e(self.summary)}</strong></p>"
+            f"<p><strong>Signal vs noise.</strong> "
+            f"{_e(self.signal_vs_noise)}</p>"
+            f"<p>{_e(self.assessment)}</p>")
+
+
+class ImprovementBacklog(BaseModel):
+    items: list[BacklogItem]
+    developer_note: str = Field(
+        description="Instructions to the Developer Agent — changes "
+                    "ship as reviewed commits, never mid-run")
+
+    def to_html(self, title):
+        rows = "".join(
+            f"<tr><td>#{i.rank}</td><td>{_e(i.title)}</td>"
+            f"<td>{_e(i.change)}</td><td>{_e(i.evidence)}</td>"
+            f"<td>{_e(i.expected_effect)}</td></tr>"
+            for i in sorted(self.items, key=lambda x: x.rank))
+        return _doc(
+            f"<h3>{_e(title)}</h3>"
+            "<table><thead><tr><th>#</th><th>Change</th><th>What</th>"
+            "<th>Evidence</th><th>Expected effect</th></tr></thead>"
+            f"<tbody>{rows}</tbody></table>"
+            f"<p><strong>To the Developer Agent.</strong> "
+            f"{_e(self.developer_note)}</p>")
+
+
+class HeadReviewOutput(BaseModel):
+    assessment: PerformanceAssessment
+    backlog: ImprovementBacklog
+
+
 def compliance_record_html(checks, passed):
     """The Compliance gate's record — deterministic, no LLM."""
     rows = "".join(

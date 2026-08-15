@@ -14,6 +14,7 @@ from alliela.stages.ideagen import run_ideagen
 from alliela.stages.pm import run_pm
 from alliela.stages.risk import run_risk
 from alliela.stages.selection import run_selection
+from alliela.stages.retrospective import run_retrospective as _run_retro
 from alliela.stages.structuring import run_structuring
 from alliela.stages.thesis import run_thesis
 
@@ -208,6 +209,50 @@ def run_origination(ctx, llm):
                           f"{thesis.kill_criteria[0].date}"
                           if thesis.kill_criteria else ""),
         } if report is not None else None),
+    }
+    if ctx.sink:
+        ctx.sink.finalize(rollup)
+    return rollup
+
+
+def run_retrospective(ctx, llm):
+    """Execute the weekly Retrospective. Returns the rollup; the
+    Improvement Backlog inside it is the Developer Agent's work
+    order — the seed of the next flow version."""
+    started = time.monotonic()
+    docs, calls, head = _run_retro(ctx, llm)
+
+    tok_in = sum(c.usage.get("prompt_tokens", 0) for c in calls)
+    tok_out = sum(c.usage.get("completion_tokens", 0) for c in calls)
+    reasoning = sum(
+        (c.usage.get("completion_tokens_details") or {})
+        .get("reasoning_tokens", 0) for c in calls)
+    cost = sum(c.cost_usd for c in calls)
+    elapsed = int(time.monotonic() - started)
+
+    items = sorted(head.backlog.items, key=lambda i: i.rank)
+    top = items[0].title if items else "no backlog items"
+    outcome = (f"Retrospective → {len(items)} backlog item(s) · "
+               f"top: {top} · {len(docs)} docs")
+
+    rollup = {
+        "outcome": outcome,
+        "calls": len(calls),
+        "tokens_in": tok_in,
+        "tokens_out": tok_out,
+        "reasoning_tokens": reasoning,
+        "cost_usd": round(cost, 4),
+        "duration_seconds": elapsed,
+        "stages": [
+            _stage_row("Retrospective",
+                       "Scorekeeper · Attribution · 3 auditors",
+                       ctx.quick_model, calls[:-1]),
+            _stage_row("Head of Performance Review", "deep judgment",
+                       ctx.deep_model, calls[-1:]),
+        ],
+        "documents": [{"key": k, "title": t} for k, t, *_ in docs],
+        "fills": [],
+        "position_context": None,
     }
     if ctx.sink:
         ctx.sink.finalize(rollup)

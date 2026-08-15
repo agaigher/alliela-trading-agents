@@ -18,6 +18,26 @@ STAGE = "Thesis Desk"
 ROUNDS = 3
 
 
+def manager_system_prompt():
+    """The Research Manager's system prompt — module-level so the
+    Retrospective's Prompt Auditor can read the ACTUAL prompt it is
+    auditing, not a paraphrase."""
+    return (
+        "You are the Research Manager on Alliela Fund 1's Thesis Desk. "
+        "Judge the Bull-Bear debate and produce the Thesis — the "
+        "document this fund is named for. Do NOT summarise the debate: "
+        "pick the stronger side, ground the verdict in specific "
+        "evidence, and resolve the unresolved tensions with a clear "
+        "stance. Kill criteria are the v4 discipline: each one dated "
+        "and decidable — when the date arrives, the named data source "
+        "answers fired or not fired; 'sentiment deteriorates' is not a "
+        "kill criterion. If the Bear won, say so: direction is "
+        "EXACTLY 'long', 'short', or 'pass' — a withheld or deferred "
+        "conviction is 'pass', and the conditions live in stance. "
+        "Return STRICT JSON only, matching:\n"
+        + json.dumps(Thesis.model_json_schema(), indent=1))
+
+
 def _msgs(system, user):
     return [{"role": "system", "content": system},
             {"role": "user", "content": user}]
@@ -78,20 +98,7 @@ def run_thesis(ctx, llm, brief, reports):
             turns.append((side, cap.text.strip()))
 
     # 7: Research Manager judges (deep reasoning)
-    manager_system = (
-        "You are the Research Manager on Alliela Fund 1's Thesis Desk. "
-        "Judge the Bull-Bear debate and produce the Thesis — the "
-        "document this fund is named for. Do NOT summarise the debate: "
-        "pick the stronger side, ground the verdict in specific "
-        "evidence, and resolve the unresolved tensions with a clear "
-        "stance. Kill criteria are the v4 discipline: each one dated "
-        "and decidable — when the date arrives, the named data source "
-        "answers fired or not fired; 'sentiment deteriorates' is not a "
-        "kill criterion. If the Bear won, say so: direction is "
-        "EXACTLY 'long', 'short', or 'pass' — a withheld or deferred "
-        "conviction is 'pass', and the conditions live in stance. "
-        "Return STRICT JSON only, matching:\n"
-        + json.dumps(Thesis.model_json_schema(), indent=1))
+    manager_system = manager_system_prompt()
     transcript_text = "\n\n".join(f"[{s}]\n{t}" for s, t in turns)
     thesis = ask_validated(
         ctx, llm, agent="Research Manager", stage=STAGE,

@@ -16,6 +16,9 @@ class RunContext:
     # the current book (position dicts), injected by the runner — the
     # engine never reads a database itself. Empty list = empty book.
     book: list = field(default_factory=list)
+    # retrospective inputs (runs, theses, manager traces, judged
+    # tickers) — assembled by the runner from the archive
+    review_pack: dict = field(default_factory=dict)
     quick_model: str = "anthropic/claude-haiku-4.5"
     deep_model: str = "anthropic/claude-sonnet-5"
     pm_model: str = "anthropic/claude-opus-5"   # PM decisions only
