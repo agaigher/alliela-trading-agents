@@ -10,18 +10,19 @@ class RunContext:
     flow_version: str
     engine_commit: str
     mandate_text: str            # the full mandate, verbatim
-    # The same mandate's machine-checkable limits, supplied by the
-    # runner from the fund's stored mandate version. Empty = the house
-    # defaults in alliela.compliance. Prose is for the agents; this is
-    # what the deterministic gate enforces, so the two must describe
-    # the same fund.
-    restrictions: dict = field(default_factory=dict)
     tip: str                     # standing theme instruction ('' = free)
     trade_date: str              # YYYY-MM-DD as-of
     sink: object = None          # sinks protocol
     # the current book (position dicts), injected by the runner — the
     # engine never reads a database itself. Empty list = empty book.
     book: list = field(default_factory=list)
+    # The same mandate's machine-checkable limits, supplied by the
+    # runner from the fund's stored mandate version. Empty = the house
+    # defaults in alliela.compliance. Prose is for the agents; this is
+    # what the deterministic gate enforces, so the two must describe
+    # the same fund. Declared here, among the defaulted fields — a
+    # defaulted field cannot precede a required one in a dataclass.
+    restrictions: dict = field(default_factory=dict)
     # retrospective inputs (runs, theses, manager traces, judged
     # tickers) — assembled by the runner from the archive
     review_pack: dict = field(default_factory=dict)
