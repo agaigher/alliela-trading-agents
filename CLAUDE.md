@@ -46,7 +46,16 @@ engine. Two layers live here:
   hardcoded ".T means Japan" proxy; a limit a mandate does not define
   is reported not-evaluable rather than silently passed. Constants
   would have meant enforcing the house fund's numbers against someone
-  else's mandate; Execution —
+  else's mandate. **Limits are hard or soft** (`limit_types`, plus a
+  per-cap `type` on country caps): a hard breach fails the gate and
+  returns the instruction to the PM; a soft breach is recorded and the
+  run proceeds — comply-or-explain, for guidelines a market move can
+  breach without anyone trading. `passed` means *no hard breach*;
+  `soft_breaches(checks)` exposes the rest, every check carries
+  `severity`, and the Compliance Record renders SOFT BREACH — never
+  PASS — so repetition stays visible to the Retrospective. **Unlisted
+  limits default to hard**, so a limit becomes advisory only by saying
+  so; Execution —
   paper fills at verified snapshot prices, paced legs deferred
   honestly. The rollup returns fills + position context; the WORKER
   applies them to the positions table — the only PMS write, never the

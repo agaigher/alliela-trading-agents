@@ -931,22 +931,52 @@ class HeadReviewOutput(BaseModel):
 
 
 def compliance_record_html(checks, passed):
-    """The Compliance gate's record — deterministic, no LLM."""
+    """The Compliance gate's record — deterministic, no LLM.
+
+    A soft breach must never render as PASS. It did not stop the trade,
+    but it is the fund exceeding a guideline it wrote for itself, and
+    the whole point of recording it is that repetition is visible.
+    """
+    def result(c):
+        if c["ok"] is None:
+            return "N/E"
+        if c["ok"]:
+            return "PASS"
+        return ("SOFT BREACH" if c.get("severity") == "soft"
+                else "FAIL")
+
     rows = "".join(
         f"<tr><td>{_e(c['rule'])}</td>"
         f"<td>{_e(c['observed'])}</td>"
-        f"<td>{'PASS' if c['ok'] else ('N/E' if c['ok'] is None else 'FAIL')}</td></tr>"
+        f"<td>{result(c)}</td></tr>"
         for c in checks)
+    soft = [c for c in checks
+            if c["ok"] is False and c.get("severity") == "soft"]
     verdict = "RELEASED" if passed else "RETURNED TO PM - DECISION"
+    if passed and soft:
+        verdict = f"RELEASED WITH {len(soft)} SOFT BREACH" \
+                  + ("ES" if len(soft) > 1 else "")
+    soft_note = ""
+    if soft:
+        items = "".join(f"<li>{_e(c['rule'])} — {_e(c['observed'])}</li>"
+                        for c in soft)
+        soft_note = ("<p><strong>Soft breaches (comply-or-explain):"
+                     "</strong> the mandate marks these advisory, so "
+                     "they are recorded rather than blocking. They "
+                     "require justification in the decision record and "
+                     "are read by the Retrospective.</p>"
+                     f"<ul>{items}</ul>")
     return _doc(
         "<h3>Compliance Record</h3>"
         "<p><em>Deterministic rule check of the Dealing Instruction "
         "against the mandate's typed restrictions and the book at "
         "order release — no judgment, no waivers. N/E = not "
-        "mechanically evaluable yet.</em></p>"
+        "mechanically evaluable yet; SOFT BREACH = a limit the mandate "
+        "declares advisory.</em></p>"
         "<table><thead><tr><th>Rule</th><th>Observed</th>"
         "<th>Result</th></tr></thead>"
         f"<tbody>{rows}</tbody></table>"
+        f"{soft_note}"
         f"<p><strong>Verdict: {verdict}</strong></p>")
 
 
