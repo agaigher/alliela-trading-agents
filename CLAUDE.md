@@ -37,7 +37,16 @@ engine. Two layers live here:
   (cash first, then lowest-conviction trims), Instruction (binds all
   into the Dealing Instruction); Compliance gate — deterministic rule
   code in alliela/compliance.py, NO LLM, typed mandate limits checked
-  against the book, N/E rules reported never skipped; Execution —
+  against the book, N/E rules reported never skipped. **Those limits
+  are DATA, not constants**: a `Restrictions` dataclass built from
+  `RunContext.restrictions`, supplied per fund by the runner from the
+  same mandate version whose prose the agents read, with
+  `DEFAULT_RESTRICTIONS` as the house values and the fallback. Country
+  caps are a list keyed by ticker suffix, generalising the old
+  hardcoded ".T means Japan" proxy; a limit a mandate does not define
+  is reported not-evaluable rather than silently passed. Constants
+  would have meant enforcing the house fund's numbers against someone
+  else's mandate; Execution —
   paper fills at verified snapshot prices, paced legs deferred
   honestly. The rollup returns fills + position context; the WORKER
   applies them to the positions table — the only PMS write, never the

@@ -4,31 +4,85 @@ restrictions, the signed RiskConstraints, and the book at order
 release. No judgment, no waivers; a failed check returns the decision,
 not the order.
 
-Typed mandate limits are encoded here and must match MANDATE_DOC
-(web/pages/home.py) — if the mandate changes, change these together.
+Typed mandate limits are **data**, carried on `RunContext.restrictions`
+and supplied per fund by the runner. They were module constants while
+one house fund existed; once a fund can be created with its own
+mandate, constants would mean the gate silently enforced the house
+fund's numbers against somebody else's rules — the page would claim
+their mandate governs while the gate ignored it.
+
+The constants survive as `DEFAULT_RESTRICTIONS`: the house fund's
+values, and the fallback when a runner supplies nothing. They still
+mirror MANDATE_DOC (web/pages/home.py) — change them together.
+
 Rules that need data the gate can't compute mechanically yet (VaR,
 top-5 at market) are reported as not-evaluable (ok=None), never
 silently skipped."""
-
-# Fund 1 typed restrictions (mirrors MANDATE_DOC sections 06-08)
-MAX_SINGLE_POSITION_COST_PCT = 12.0
-MAX_COUNTRY_GROSS_PCT = 25.0          # single non-US country
-MAX_GROSS_SHORT_PCT = 20.0
-MAX_SINGLE_SHORT_PCT = 5.0
-CASH_FLOOR_PCT = 1.0
-
-# Daily-loop guardrails (the loop executes discipline, it does not
-# deliberate — anything bigger reroutes through origination)
-MAX_DAILY_TURNOVER_PCT = 10.0         # sum of legs per day
-MAX_SIZE_CHANGE_PCT = 2.0             # per name without re-underwrite
+from dataclasses import dataclass, field
 
 JAPAN_SUFFIX = ".T"
 
 
+@dataclass(frozen=True)
+class Restrictions:
+    """A mandate's machine-checkable limits.
+
+    Every field is something the gate can evaluate without judgment.
+    Prose that needs interpretation stays in the mandate text for the
+    agents to read — it does not belong here, because a rule the gate
+    cannot decide mechanically is a rule it must report as
+    not-evaluable rather than pretend to enforce.
+    """
+    max_single_position_cost_pct: float = 12.0
+    max_gross_short_pct: float = 20.0
+    max_single_short_pct: float = 5.0
+    cash_floor_pct: float = 1.0
+    shorting_permitted: bool = True
+    # Country gross caps keyed by ticker suffix — the honest
+    # generalisation of the old hardcoded ".T is Japan" proxy. Each
+    # entry: {"suffix": ".T", "country": "Japan", "max_pct": 25.0}.
+    country_gross_caps: tuple = ()
+    # Daily-loop guardrails (the loop executes discipline, it does not
+    # deliberate — anything bigger reroutes through origination)
+    max_daily_turnover_pct: float = 10.0
+    max_size_change_pct: float = 2.0
+
+    @classmethod
+    def from_dict(cls, data):
+        """Build from stored JSON, ignoring unknown keys so a mandate
+        written by a newer schema never crashes an older engine."""
+        if not data:
+            return DEFAULT_RESTRICTIONS
+        if isinstance(data, cls):
+            return data
+        known = {f for f in cls.__dataclass_fields__}
+        kwargs = {k: v for k, v in data.items() if k in known}
+        caps = kwargs.get("country_gross_caps")
+        if caps:
+            kwargs["country_gross_caps"] = tuple(
+                {"suffix": c.get("suffix", ""),
+                 "country": c.get("country", "?"),
+                 "max_pct": float(c.get("max_pct", 100.0))}
+                for c in caps)
+        return cls(**kwargs)
+
+
+# The house fund's values, and the fallback when a runner supplies
+# nothing (local drivers, older callers, tests).
+DEFAULT_RESTRICTIONS = Restrictions(
+    country_gross_caps=({"suffix": JAPAN_SUFFIX, "country": "Japan",
+                         "max_pct": 25.0},),
+)
+
+
 def check_instruction(instruction, decision, constraints, book,
-                      funding=None):
+                      funding=None, restrictions=None):
     """Returns (checks, passed). Each check: {rule, observed, ok}
-    where ok is True/False/None (not evaluable)."""
+    where ok is True/False/None (not evaluable).
+
+    `restrictions` is the fund's typed mandate limits; omitted, the
+    house defaults apply."""
+    r = Restrictions.from_dict(restrictions)
     checks = []
 
     def add(rule, observed, ok):
@@ -48,49 +102,57 @@ def check_instruction(instruction, decision, constraints, book,
 
     # 2. Mandate single-position cap at cost
     add(f"Mandate max single position ≤ "
-        f"{MAX_SINGLE_POSITION_COST_PCT:g}% at cost",
+        f"{r.max_single_position_cost_pct:g}% at cost",
         f"{entry_size + abs(existing):g}%",
-        entry_size + abs(existing) <= MAX_SINGLE_POSITION_COST_PCT)
+        entry_size + abs(existing) <= r.max_single_position_cost_pct)
 
-    # 3. Country gross (Japan proxy: .T tickers)
-    jp_book = sum(abs(float(p["weight_pct"])) for p in book
-                  if str(p["ticker"]).endswith(JAPAN_SUFFIX))
-    jp_delta = sum(l.size_pct_nav for l in entry_legs
-                   if l.ticker.endswith(JAPAN_SUFFIX))
-    jp_trims = sum(l.size_pct_nav for l in instruction.legs
-                   if l.purpose == "funding_trim"
-                   and l.ticker.endswith(JAPAN_SUFFIX))
-    jp_after = jp_book + jp_delta - jp_trims
-    add(f"Mandate single non-US country gross ≤ "
-        f"{MAX_COUNTRY_GROSS_PCT:g}%",
-        f"Japan gross after instruction ≈ {jp_after:.1f}%",
-        jp_after <= MAX_COUNTRY_GROSS_PCT)
+    # 3. Country gross — one check per configured cap, by ticker
+    #    suffix. No caps configured means nothing to enforce, which is
+    #    stated rather than passed silently.
+    if r.country_gross_caps:
+        for cap_rule in r.country_gross_caps:
+            suffix = cap_rule["suffix"]
+            in_book = sum(abs(float(p["weight_pct"])) for p in book
+                          if str(p["ticker"]).endswith(suffix))
+            delta = sum(l.size_pct_nav for l in entry_legs
+                        if l.ticker.endswith(suffix))
+            trims = sum(l.size_pct_nav for l in instruction.legs
+                        if l.purpose == "funding_trim"
+                        and l.ticker.endswith(suffix))
+            after = in_book + delta - trims
+            add(f"Mandate {cap_rule['country']} gross ≤ "
+                f"{cap_rule['max_pct']:g}%",
+                f"{cap_rule['country']} gross after instruction "
+                f"≈ {after:.1f}%",
+                after <= cap_rule["max_pct"])
+    else:
+        add("Country gross caps", "none defined in this mandate", None)
 
     # 4. Shorting rules
-    is_short = decision.action == "buy" and any(
-        l.side == "sell" and l.purpose == "entry"
-        for l in instruction.legs)
     short_entry = sum(l.size_pct_nav for l in entry_legs
                       if l.side == "sell")
     if short_entry:
+        if not r.shorting_permitted:
+            add("Mandate permits shorting", "mandate forbids shorts, "
+                f"instruction shorts {short_entry:g}%", False)
         gross_short = sum(abs(float(p["weight_pct"])) for p in book
                           if p["direction"] == "S") + short_entry
-        add(f"Mandate max single short ≤ {MAX_SINGLE_SHORT_PCT:g}%",
+        add(f"Mandate max single short ≤ {r.max_single_short_pct:g}%",
             f"{short_entry:g}%",
-            short_entry <= MAX_SINGLE_SHORT_PCT)
-        add(f"Mandate gross short ≤ {MAX_GROSS_SHORT_PCT:g}%",
+            short_entry <= r.max_single_short_pct)
+        add(f"Mandate gross short ≤ {r.max_gross_short_pct:g}%",
             f"≈ {gross_short:.1f}% after entry",
-            gross_short <= MAX_GROSS_SHORT_PCT)
+            gross_short <= r.max_gross_short_pct)
     else:
         add("Shorting rules", "no short legs — n/a", True)
 
     # 5. Cash floor (needs the funding plan's arithmetic)
     if funding is not None:
-        add(f"Mandate cash floor ≥ {CASH_FLOOR_PCT:g}%",
+        add(f"Mandate cash floor ≥ {r.cash_floor_pct:g}%",
             f"funding plan leaves {funding.resulting_cash_pct:g}%",
-            funding.resulting_cash_pct >= CASH_FLOOR_PCT)
+            funding.resulting_cash_pct >= r.cash_floor_pct)
     else:
-        add(f"Mandate cash floor ≥ {CASH_FLOOR_PCT:g}%",
+        add(f"Mandate cash floor ≥ {r.cash_floor_pct:g}%",
             "no funding plan supplied", None)
 
     # 6. Stops present when constraints demand them
@@ -110,10 +172,11 @@ def check_instruction(instruction, decision, constraints, book,
     return checks, passed
 
 
-def check_daily(legs, book):
+def check_daily(legs, book, restrictions=None):
     """The daily-loop compliance gate: mandate rules + loop guardrails
     on the Rebalance Instruction's legs. Deterministic, no LLM; FAIL
     bounces the note back to Portfolio Review."""
+    r = Restrictions.from_dict(restrictions)
     checks = []
 
     def add(rule, observed, ok):
@@ -123,8 +186,8 @@ def check_daily(legs, book):
     weights = {p["ticker"]: float(p["weight_pct"]) for p in book}
 
     turnover = sum(l.size_pct_nav for l in legs)
-    add(f"Loop guardrail: daily turnover ≤ {MAX_DAILY_TURNOVER_PCT:g}%",
-        f"{turnover:g}%", turnover <= MAX_DAILY_TURNOVER_PCT)
+    add(f"Loop guardrail: daily turnover ≤ {r.max_daily_turnover_pct:g}%",
+        f"{turnover:g}%", turnover <= r.max_daily_turnover_pct)
 
     new_names = [l.ticker for l in legs
                  if l.ticker not in tickers_in_book]
@@ -132,8 +195,8 @@ def check_daily(legs, book):
         f"new: {new_names or 'none'}", not new_names)
 
     oversize = [l.ticker for l in legs
-                if l.size_pct_nav > MAX_SIZE_CHANGE_PCT]
-    add(f"Loop guardrail: size change ≤ {MAX_SIZE_CHANGE_PCT:g}% per "
+                if l.size_pct_nav > r.max_size_change_pct]
+    add(f"Loop guardrail: size change ≤ {r.max_size_change_pct:g}% per "
         f"name without re-underwrite",
         f"over: {oversize or 'none'}", not oversize)
 
@@ -153,9 +216,9 @@ def check_daily(legs, book):
         if l.side == "sell" and shorts_after.get(l.ticker) is not None:
             shorts_after[l.ticker] += l.size_pct_nav
     gross_short = sum(shorts_after.values())
-    add(f"Mandate gross short ≤ {MAX_GROSS_SHORT_PCT:g}%",
+    add(f"Mandate gross short ≤ {r.max_gross_short_pct:g}%",
         f"≈ {gross_short:.1f}% after legs",
-        gross_short <= MAX_GROSS_SHORT_PCT)
+        gross_short <= r.max_gross_short_pct)
 
     passed = all(c["ok"] is not False for c in checks)
     return checks, passed

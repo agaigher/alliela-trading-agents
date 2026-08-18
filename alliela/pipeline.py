@@ -104,7 +104,8 @@ def run_origination(ctx, llm):
     if instruction is not None:
         # Compliance gate — deterministic, no LLM, 0 calls
         checks, compliance_passed = check_instruction(
-            instruction, decision, constraints, ctx.book, funding)
+            instruction, decision, constraints, ctx.book, funding,
+            restrictions=ctx.restrictions)
         record = compliance_record_html(checks, compliance_passed)
         doc = ("compliance-record", "Compliance Record", "output",
                record, {"agent": "Compliance (rule engine)",
@@ -288,8 +289,9 @@ def run_daily_loop(ctx, llm):
     report = None
     compliance_passed = None
     if note.rebalance:
-        checks, compliance_passed = check_daily(note.rebalance,
-                                                ctx.book or [])
+        checks, compliance_passed = check_daily(
+            note.rebalance, ctx.book or [],
+            restrictions=ctx.restrictions)
         record = compliance_record_html(checks, compliance_passed)
         doc = ("compliance-record", "Compliance Record", "output",
                record, {"agent": "Compliance (rule engine)",
