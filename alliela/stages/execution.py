@@ -20,7 +20,7 @@ def run_execution(ctx, llm, instruction):
     snapshots = {t: ticker_snapshot(t) for t in tickers}
 
     system = (
-        "You are the Trading Desk of Alliela Fund 1 on your second "
+        f"You are the Trading Desk of {ctx.fund_name} on your second "
         "duty: Execution, on a closed paper book marked against real "
         "prices. Execute the Dealing Instruction: day-1 fills happen "
         "at the verified snapshot price (this is the paper book's "

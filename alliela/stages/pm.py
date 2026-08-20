@@ -35,7 +35,7 @@ def run_pm(ctx, llm, thesis, proposal, constraints):
         f"The current book:\n{book}")
 
     decision_system = (
-        "You are the Portfolio Manager of Alliela Fund 1 — "
+        f"You are the Portfolio Manager of {ctx.fund_name} — "
         "PM - Decision, the accountable owner of the book. Decide: "
         "buy, sell, or decline. The RiskConstraints are binding: your "
         "compliance list must address EVERY constraint — 'satisfied' "

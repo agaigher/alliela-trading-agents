@@ -60,7 +60,7 @@ def run_risk(ctx, llm, thesis, proposal):
     turns = []
     for key, lens_name, lens_rules in LENSES:
         system = (
-            f"You are the {lens_name} lens on Alliela Fund 1's Risk "
+            f"You are the {lens_name} lens on {ctx.fund_name}'s Risk "
             f"panel. Your lens, and only your lens: {lens_rules}\n\n"
             "This is a debate: read the prior lenses' views and "
             "respond where you disagree or where their concerns "
@@ -82,7 +82,7 @@ def run_risk(ctx, llm, thesis, proposal):
         turns.append((lens_name, views[key].assessment))
 
     head_system = (
-        "You are the Head of Risk of Alliela Fund 1 — the independent "
+        f"You are the Head of Risk of {ctx.fund_name} — the independent "
         "risk authority. Read the three lens views against the book "
         "and sign the RiskConstraints: binding on the Portfolio "
         "Manager, who must satisfy each constraint or explicitly "

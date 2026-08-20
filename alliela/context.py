@@ -23,6 +23,11 @@ class RunContext:
     # the same fund. Declared here, among the defaulted fields — a
     # defaulted field cannot precede a required one in a dataclass.
     restrictions: dict = field(default_factory=dict)
+    # The fund's own name. Every agent prompt used to say "Alliela
+    # Fund 1" regardless of which fund was running, so a user's agents
+    # were told they worked for the house desk while the mandate in the
+    # same prompt described someone else. Defaulted for local drivers.
+    fund_name: str = "Alliela Fund 1"
     # retrospective inputs (runs, theses, manager traces, judged
     # tickers) — assembled by the runner from the archive
     review_pack: dict = field(default_factory=dict)

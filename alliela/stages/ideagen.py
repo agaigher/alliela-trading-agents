@@ -36,13 +36,13 @@ def _json_msg(system, user):
             {"role": "user", "content": user}]
 
 
-def _desk_system(desk_name, lens, mandate, tip):
+def _desk_system(desk_name, lens, mandate, tip, fund_name):
     tipline = (f'The firm\'s standing theme instruction for this run: '
                f'"{tip}". A tip focuses the scan; it never overrides '
                f'a mandate limit.' if tip else
                "No theme tip this run — free scan inside the universe.")
     return (
-        f"You are the {desk_name} of Alliela Fund 1's Idea Generation "
+        f"You are the {desk_name} of {fund_name}'s Idea Generation "
         f"tier — {lens}\n\n{tipline}\n\n"
         "The fund mandate binds everything you propose (universe, "
         "liquidity floor, shorting rules):\n\n" + mandate + "\n\n"
@@ -81,7 +81,8 @@ def run_ideagen(ctx, llm):
                 f"leads, not evidence):\n\n{news}\n\n"
                 f"Produce the {name}'s ideas book.")
         books[key] = ask(f"{name}", _desk_system(name, lens,
-                                                 ctx.mandate_text, tip),
+                                                 ctx.mandate_text, tip,
+                                                 ctx.fund_name),
                          user, IdeaBook)
 
     # 4: Head reviews all three books, one revision round
@@ -120,7 +121,8 @@ def run_ideagen(ctx, llm):
                 f"candidates that cannot survive the notes. Return the "
                 f"full revised book as STRICT JSON, same schema.")
         books[key] = ask(name, _desk_system(name, lens,
-                                            ctx.mandate_text, tip),
+                                            ctx.mandate_text, tip,
+                                            ctx.fund_name),
                          user, IdeaBook)
 
     # 8: Head compiles the Combined Ideas Book (unranked)

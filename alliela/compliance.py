@@ -42,6 +42,18 @@ class Restrictions:
     # generalisation of the old hardcoded ".T is Japan" proxy. Each
     # entry: {"suffix": ".T", "country": "Japan", "max_pct": 25.0}.
     country_gross_caps: tuple = ()
+    # Book-level exposure. Computable from signed weights alone — no
+    # marked prices, no risk model — so there is no excuse for these
+    # living only in prose.
+    max_gross_exposure_pct: float = 130.0
+    net_exposure_min_pct: float = 60.0
+    net_exposure_max_pct: float = 110.0
+    max_positions: int = 20
+    # Liquidity floor in USD of average daily value traded. Enforced by
+    # the Selection Committee's feasibility lens, not this gate — the
+    # gate never sees ADV. It lives here because it is a mandate limit,
+    # and it was previously hardcoded into the lens prompt.
+    min_adv_usd: float = 8_000_000.0
     # Daily-loop guardrails (the loop executes discipline, it does not
     # deliberate — anything bigger reroutes through origination)
     max_daily_turnover_pct: float = 10.0
@@ -200,7 +212,32 @@ def check_instruction(instruction, decision, constraints, book,
         add(f"Mandate cash floor ≥ {r.cash_floor_pct:g}%",
             "no funding plan supplied", None)
 
-    # 6. Stops present when constraints demand them
+    # 6. Book-level exposure after the instruction. Signed weights
+    #    make gross and net arithmetic, not estimation.
+    signed = {p["ticker"]: float(p["weight_pct"]) for p in book}
+    after = dict(signed)
+    for l in instruction.legs:
+        delta = l.size_pct_nav if l.side == "buy" else -l.size_pct_nav
+        if l.purpose == "funding_trim":
+            delta = -abs(l.size_pct_nav) if signed.get(l.ticker, 0) > 0                 else abs(l.size_pct_nav)
+        after[l.ticker] = after.get(l.ticker, 0.0) + delta
+    after = {t: w for t, w in after.items() if abs(w) > 1e-9}
+    gross = sum(abs(w) for w in after.values())
+    net = sum(after.values())
+    add(f"Mandate gross exposure <= {r.max_gross_exposure_pct:g}% NAV",
+        f"{gross:.1f}% after instruction",
+        gross <= r.max_gross_exposure_pct,
+        r.kind("max_gross_exposure_pct"))
+    add(f"Mandate net exposure {r.net_exposure_min_pct:g}-"
+        f"{r.net_exposure_max_pct:g}% NAV",
+        f"{net:.1f}% after instruction",
+        r.net_exposure_min_pct <= net <= r.net_exposure_max_pct,
+        r.kind("net_exposure_min_pct"))
+    add(f"Mandate max positions <= {r.max_positions:g}",
+        f"{len(after)} names after instruction",
+        len(after) <= r.max_positions, r.kind("max_positions"))
+
+    # 7. Stops present when constraints demand them
     add("Mandatory stops placed",
         f"{len(instruction.stops_to_place)} stop(s) in instruction vs "
         f"{len(constraints.mandatory_stops)} required",
@@ -208,7 +245,7 @@ def check_instruction(instruction, decision, constraints, book,
         len(constraints.mandatory_stops) > 0
         or len(constraints.mandatory_stops) == 0)
 
-    # 7. Not mechanically evaluable yet — reported, not skipped
+    # 8. Not mechanically evaluable yet — reported, not skipped
     add("Top-5 concentration ≤ 65% at market", "needs marked prices",
         None)
     add("1-day 95% VaR ≤ 2.5%", "needs a risk model", None)

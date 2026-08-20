@@ -24,7 +24,7 @@ def run_structuring(ctx, llm, thesis, reports):
     positioning = reports["sentiment"].model_dump()
 
     system = (
-        "You are the Trading Desk of Alliela Fund 1, on your first "
+        f"You are the Trading Desk of {ctx.fund_name}, on your first "
         "duty: Pre-Trade Structuring. Turn the Thesis into a concrete, "
         "executable Transaction Proposal. Rules: size within the "
         "mandate's limits and justify the number; tranche the entry "

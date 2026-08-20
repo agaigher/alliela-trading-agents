@@ -18,12 +18,12 @@ STAGE = "Thesis Desk"
 ROUNDS = 3
 
 
-def manager_system_prompt():
+def manager_system_prompt(fund_name="the fund"):
     """The Research Manager's system prompt — module-level so the
     Retrospective's Prompt Auditor can read the ACTUAL prompt it is
     auditing, not a paraphrase."""
     return (
-        "You are the Research Manager on Alliela Fund 1's Thesis Desk. "
+        f"You are the Research Manager on {fund_name}'s Thesis Desk. "
         "Judge the Bull-Bear debate and produce the Thesis — the "
         "document this fund is named for. Do NOT summarise the debate: "
         "pick the stronger side, ground the verdict in specific "
@@ -44,12 +44,12 @@ def _msgs(system, user):
 
 
 def _debater_system(side, ctx):
-    stance = ("You are the Bull on Alliela Fund 1's Thesis Desk, "
+    stance = (f"You are the Bull on {ctx.fund_name}'s Thesis Desk, "
               "advocating FOR the position. Build the strongest "
               "evidence-based case for the idea and dismantle the "
               "Bear's arguments directly."
               if side == "Bull" else
-              "You are the Bear on Alliela Fund 1's Thesis Desk, "
+              f"You are the Bear on {ctx.fund_name}'s Thesis Desk, "
               "arguing AGAINST the position. Expose the risks, the "
               "over-optimistic assumptions, and the weaknesses in the "
               "Bull's case directly.")
@@ -98,7 +98,7 @@ def run_thesis(ctx, llm, brief, reports):
             turns.append((side, cap.text.strip()))
 
     # 7: Research Manager judges (deep reasoning)
-    manager_system = manager_system_prompt()
+    manager_system = manager_system_prompt(ctx.fund_name)
     transcript_text = "\n\n".join(f"[{s}]\n{t}" for s, t in turns)
     thesis = ask_validated(
         ctx, llm, agent="Research Manager", stage=STAGE,
@@ -112,7 +112,7 @@ def run_thesis(ctx, llm, brief, reports):
 
     # 8: Pre-mortem (deep reasoning) — prospective hindsight
     premortem_system = (
-        "You are the Pre-mortem on Alliela Fund 1's Thesis Desk. It is "
+        f"You are the Pre-mortem on {ctx.fund_name}'s Thesis Desk. It is "
         "twelve months from the as-of date and the position has FAILED. "
         "You are not arguing against the trade — it was made. Explain, "
         "as retrospective fact, why it broke: the failure modes "

@@ -64,9 +64,9 @@ def _packs(brief, trade_date):
     }
 
 
-def _analyst_system(name, lens, mandate):
+def _analyst_system(name, lens, mandate, fund_name):
     return (
-        f"You are the {name} on Alliela Fund 1's Analyst team. Your "
+        f"You are the {name} on {fund_name}'s Analyst team. Your "
         f"lens, and only your lens: {lens}\n\n"
         "Rules: every claim cites its source — the injected data pack, "
         "a dated headline, or is explicitly marked inference. Numbers "
@@ -101,7 +101,8 @@ def run_analysts(ctx, llm, brief):
                 f"Write the {TITLES[key]} (report_type: '{key}').")
         reports[key] = ask(name,
                            _analyst_system(name, lens,
-                                           ctx.mandate_text),
+                                           ctx.mandate_text,
+                                           ctx.fund_name),
                            user, AnalystReport)
 
     # 5: the Lead audits all four
@@ -138,7 +139,8 @@ def run_analysts(ctx, llm, brief):
                 f"schema.")
         reports[key] = ask(name,
                            _analyst_system(name, lens,
-                                           ctx.mandate_text),
+                                           ctx.mandate_text,
+                                           ctx.fund_name),
                            user, AnalystReport)
 
     for key, name, _ in ANALYSTS:

@@ -101,7 +101,7 @@ def run_retrospective(ctx, llm):
     # 1 — Scorekeeper
     scoreboard = ask(
         "Scorekeeper",
-        "You are the Scorekeeper of Alliela Fund 1's weekly "
+        f"You are the Scorekeeper of {ctx.fund_name}'s weekly "
         "Retrospective. Score the fund against reality: classify "
         "positions Worked / Failed / Inconclusive RELATIVE TO THEIR "
         "THESIS EXPECTATION, never raw P&L — and be honest about data "

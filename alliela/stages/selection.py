@@ -17,6 +17,19 @@ from alliela.documents import IdeaBrief, Scorecard
 from alliela.market import ticker_snapshot
 from alliela.structured import ask_validated
 
+
+def _adv_floor(ctx):
+    """The fund's liquidity floor, formatted for a prompt.
+
+    This was the literal "$8M" baked into the lens rules. For a
+    fund with a different floor that placed a contradiction inside
+    the same prompt as its own mandate: the document saying one
+    number and the agent's instructions another.
+    """
+    from alliela.compliance import Restrictions
+    usd = Restrictions.from_dict(ctx.restrictions).min_adv_usd
+    return f"${usd / 1_000_000:g}M"
+
 STAGE = "Selection Committee"
 
 LENSES = [
@@ -31,7 +44,8 @@ LENSES = [
      "market data provided, not on the desks' claims. Fatal rules: a "
      "ticker whose verification status is 'not_found' is a fantasy "
      "name — always fatal; average daily value traded below the "
-     "mandate's $8M floor — fatal; venue outside the mandate universe "
+     "mandate's {adv_floor} floor — fatal; venue outside the "
+     "mandate universe "
      "— fatal. 'data_unavailable' is NEVER fatal: score conservatively "
      "and flag the coverage gap. Also flag any name/ticker mismatch "
      "between a desk's claim and the verified name."),
@@ -66,10 +80,11 @@ def run_selection(ctx, llm, combined):
     cards = {}
     for key, agent, lens, lens_rules in LENSES:
         system = (
-            f"You are the {agent} of Alliela Fund 1's Selection "
+            f"You are the {agent} of {ctx.fund_name}'s Selection "
             f"Committee. You judge EVERY candidate through exactly one "
             f"lens — {lens} — and nothing else.\n\nLens rules: "
-            f"{lens_rules}\n\nThe mandate (universe, liquidity floor, "
+            f"{lens_rules.format(adv_floor=_adv_floor(ctx))}"
+            f"\n\nThe mandate (universe, liquidity floor, "
             f"shorting rules) binds:\n\n{ctx.mandate_text}\n\n"
             "Score every candidate 1-5 through your lens, mark fatal "
             "flags per your rules, keep rationales to two sentences. "
