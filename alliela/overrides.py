@@ -1,18 +1,20 @@
 """Per-fund agent overrides.
 
-A user owns their fund's desks: which model an agent thinks with, what
-its instructions say, and what it must put in the document it writes.
-This module is where those preferences meet the prompt, and it is
-deliberately the *only* place — every stage already funnels through
-`ask_validated`, so one hook covers the pipeline instead of ten.
+A user owns their fund's desks: which model an agent thinks with, and
+what its instructions say. This module is where those preferences meet
+the prompt, and it is deliberately the *only* place — every stage
+already funnels through `ask_validated`, so one hook covers the
+pipeline instead of ten.
 
-Two things stay the engine's, not the user's:
+The portal prefills its editor with the agent's real prompt (see
+alliela.prompts), so an override normally starts life as the shipped
+text with an edit in it, not as a blank box. Two things stay the
+engine's either way:
 
-* **The output contract.** Every prompt ends with the document's JSON
-  schema because later desks read those fields by name. A replaced
-  prompt gets the schema re-attached from the same `schema_json` the
-  caller already passes, so a user cannot accidentally delete the one
-  paragraph that makes the run parseable.
+* **The output contract.** Later desks read a document's fields by
+  name. The prefilled prompt already carries its JSON schema; if an
+  owner deletes it, the engine puts one back rather than letting the
+  run produce something nothing downstream can read.
 * **The mandate.** Instructions are how an agent works, not what it is
   allowed to do. The Compliance gate is deterministic code reading the
   fund's typed limits, and nothing written here reaches it.
@@ -38,11 +40,35 @@ ALLOWED_MODELS = {m for m, _, _ in MODEL_CHOICES}
 CONTRACT = ("\n\nReturn STRICT JSON only, no prose around it, matching "
             "this schema:\n")
 
+# Agents whose SECOND duty runs on a different prompt from the one the
+# owner edits. Their model override still applies — it is the same
+# agent thinking — but replacing a compile prompt with a review prompt
+# (or vice versa) would put the wrong instructions on the wrong call.
+# The call sites for these pass override_prompt=False.
+SECONDARY_DUTIES = {
+    "head-ideagen": "reviews the three desk books before compiling them",
+    "head-risk": "answers the PM's escalation in the bounce-back round",
+}
+
 
 def _for(ctx, node):
     if not node:
         return None
     return (getattr(ctx, "agent_overrides", None) or {}).get(node)
+
+
+def _fill(ctx, text):
+    """Put the run's real values into the display placeholders.
+
+    A stored prompt keeps `{mandate}` rather than a copy of the mandate
+    text: an owner edits their mandate later and every agent should
+    read the new one. Plain replace, not str.format — these prompts are
+    full of JSON braces.
+    """
+    return (text
+            .replace("{fund_name}", getattr(ctx, "fund_name", "") or "")
+            .replace("{mandate}", getattr(ctx, "mandate_text", "") or "")
+            .replace("{tip}", getattr(ctx, "tip", "") or ""))
 
 
 def resolve_model(ctx, node, model):
@@ -62,18 +88,20 @@ def resolve_system(ctx, node, system, schema_json=None):
     """The system prompt after the owner's edits, contract intact.
 
     schema_json=None means the agent answers in prose (the Bull/Bear
-    debate turns), so a replaced prompt gets no JSON contract bolted
-    onto it — that would tell a debater to argue in JSON."""
+    debate turns), so nothing is appended — that would tell a debater
+    to argue in JSON.
+    """
     ov = _for(ctx, node)
     if not ov:
         return system
     prompt = (ov.get("prompt") or "").strip()
-    if prompt:
-        system = prompt + (CONTRACT + schema_json if schema_json else "")
-    guidance = (ov.get("output_guidance") or "").strip()
-    if guidance:
-        system += (
-            "\n\nThe fund owner requires the following of the document "
-            "you produce. It adds to the schema above, never replaces "
-            "it, and it does not loosen any mandate limit:\n" + guidance)
+    if not prompt:
+        return system
+    system = _fill(ctx, prompt)
+    # The prefilled prompt already ends in the document's schema, so
+    # this normally does nothing. It matters when an owner has deleted
+    # it: every JSON Schema dump contains "properties", so its absence
+    # means the run would otherwise come back unparseable.
+    if schema_json and '"properties"' not in system:
+        system += CONTRACT + schema_json
     return system

@@ -43,6 +43,35 @@ TITLES = {"liquidity": "Liquidity View",
           "drawdown": "Drawdown View"}
 
 
+def lens_system_prompt(ctx, lens_name, lens_rules):
+    return (
+        f"You are the {lens_name} lens on {ctx.fund_name}'s Risk "
+        f"panel. Your lens, and only your lens: {lens_rules}\n\n"
+        "This is a debate: read the prior lenses' views and "
+        "respond where you disagree or where their concerns "
+        "compound yours. Recommend concrete, typed constraints — "
+        "numbers, not sentiment. The mandate's limits are the "
+        "outer bound; you may be far tighter:\n\n"
+        + ctx.mandate_text
+        + "\n\nReturn STRICT JSON only, matching:\n"
+        + json.dumps(RiskView.model_json_schema(), indent=1))
+
+
+def head_system_prompt(ctx):
+    return (
+        f"You are the Head of Risk of {ctx.fund_name} — the independent "
+        "risk authority. Read the three lens views against the book "
+        "and sign the RiskConstraints: binding on the Portfolio "
+        "Manager, who must satisfy each constraint or explicitly "
+        "escalate. Aggregate by judgment — where lenses conflict, "
+        "decide; where they compound, tighten. Stops are mandatory, "
+        "not advisory. Use the veto only when no constraint set makes "
+        "the trade acceptable. Every number in your constraints must "
+        "trace to a lens view, the book, or the mandate. Return "
+        "STRICT JSON only, matching:\n"
+        + json.dumps(RiskConstraints.model_json_schema(), indent=1))
+
+
 def run_risk(ctx, llm, thesis, proposal):
     """Returns (documents, calls, constraints)."""
     calls = []
@@ -59,17 +88,7 @@ def run_risk(ctx, llm, thesis, proposal):
     views = {}
     turns = []
     for key, lens_name, lens_rules in LENSES:
-        system = (
-            f"You are the {lens_name} lens on {ctx.fund_name}'s Risk "
-            f"panel. Your lens, and only your lens: {lens_rules}\n\n"
-            "This is a debate: read the prior lenses' views and "
-            "respond where you disagree or where their concerns "
-            "compound yours. Recommend concrete, typed constraints — "
-            "numbers, not sentiment. The mandate's limits are the "
-            "outer bound; you may be far tighter:\n\n"
-            + ctx.mandate_text
-            + "\n\nReturn STRICT JSON only, matching:\n"
-            + json.dumps(RiskView.model_json_schema(), indent=1))
+        system = lens_system_prompt(ctx, lens_name, lens_rules)
         prior = "\n\n".join(
             f"## {TITLES[k]}\n{views[k].model_dump_json(indent=1)}"
             for k in views) or "(you open the panel)"
@@ -82,18 +101,7 @@ def run_risk(ctx, llm, thesis, proposal):
             model=ctx.deep_model, calls=calls)
         turns.append((lens_name, views[key].assessment))
 
-    head_system = (
-        f"You are the Head of Risk of {ctx.fund_name} — the independent "
-        "risk authority. Read the three lens views against the book "
-        "and sign the RiskConstraints: binding on the Portfolio "
-        "Manager, who must satisfy each constraint or explicitly "
-        "escalate. Aggregate by judgment — where lenses conflict, "
-        "decide; where they compound, tighten. Stops are mandatory, "
-        "not advisory. Use the veto only when no constraint set makes "
-        "the trade acceptable. Every number in your constraints must "
-        "trace to a lens view, the book, or the mandate. Return "
-        "STRICT JSON only, matching:\n"
-        + json.dumps(RiskConstraints.model_json_schema(), indent=1))
+    head_system = head_system_prompt(ctx)
     head_user = base_context + "\n\nThe three lens views:\n\n" + \
         "\n\n".join(f"## {TITLES[k]}\n"
                     f"{views[k].model_dump_json(indent=1)}"

@@ -19,6 +19,64 @@ from alliela.structured import ask_validated
 STAGE = "Portfolio Manager"
 
 
+def decision_system_prompt(ctx):
+    return (
+        f"You are the Portfolio Manager of {ctx.fund_name} — "
+        "PM - Decision, the accountable owner of the book. Decide: "
+        "buy, sell, or decline. The RiskConstraints are binding: your "
+        "compliance list must address EVERY constraint — 'satisfied' "
+        "with how, or 'escalated' with why (an escalation goes back "
+        "to the Head of Risk for one round; use it only when you "
+        "genuinely believe a constraint is wrong for the book). "
+        "Declining is a first-class outcome — the no-trade path costs "
+        "nothing but the work already done. Size within the cap; "
+        "conviction was earned upstream, not here. The mandate:\n\n"
+        + ctx.mandate_text
+        + "\n\nReturn STRICT JSON only, matching:\n"
+        + json.dumps(PortfolioDecision.model_json_schema(), indent=1))
+
+
+def risk_bounce_system_prompt():
+    return (
+        "You are the Head of Risk. The PM has escalated one or "
+        "more of your signed constraints. Respond: for each "
+        "escalation, either revise the constraint (with the new "
+        "number and why) or hold firm (and why). Your response is "
+        "final — there is exactly one bounce-back round. Return "
+        "STRICT JSON: an updated RiskConstraints object, matching:"
+        "\n" + json.dumps(RiskConstraints.model_json_schema(),
+                          indent=1))
+
+
+def funding_system_prompt(ctx):
+    return (
+        "You are the Portfolio Manager on your second duty — "
+        "PM - Funding: portfolio construction. Make room for the "
+        "decided size from the real book: cash above the 1% floor "
+        "first, then trim the LOWEST-conviction holdings — name "
+        "them, justify each trim by conviction rank and thesis "
+        "state, never trim winners to fund a maybe. Arithmetic "
+        "must close: sources sum to the target; resulting cash "
+        "respects the floor. The mandate:\n\n" + ctx.mandate_text
+        + "\n\nReturn STRICT JSON only, matching:\n"
+        + json.dumps(FundingPlan.model_json_schema(), indent=1))
+
+
+def instruction_system_prompt():
+    return (
+        "You are the Portfolio Manager on your third duty — "
+        "PM - Instruction. Bind the decision and the funding plan "
+        "into the Dealing Instruction: every leg (entry tranches "
+        "per the proposal's plan, funding trims, any hedge), "
+        "sides, sizes, pacing; the stops the RiskConstraints "
+        "mandate; standing orders; validity. This document goes "
+        "to the Compliance gate and then the desk — it must be "
+        "executable as written. Return STRICT JSON only, "
+        "matching:\n"
+        + json.dumps(DealingInstruction.model_json_schema(),
+                     indent=1))
+
+
 def run_pm(ctx, llm, thesis, proposal, constraints):
     """Returns (documents, calls, decision, funding, instruction).
     decision.action == 'decline' short-circuits funding/instruction."""
@@ -34,20 +92,7 @@ def run_pm(ctx, llm, thesis, proposal, constraints):
         f"The Thesis:\n{thesis.model_dump_json(indent=1)}\n\n"
         f"The current book:\n{book}")
 
-    decision_system = (
-        f"You are the Portfolio Manager of {ctx.fund_name} — "
-        "PM - Decision, the accountable owner of the book. Decide: "
-        "buy, sell, or decline. The RiskConstraints are binding: your "
-        "compliance list must address EVERY constraint — 'satisfied' "
-        "with how, or 'escalated' with why (an escalation goes back "
-        "to the Head of Risk for one round; use it only when you "
-        "genuinely believe a constraint is wrong for the book). "
-        "Declining is a first-class outcome — the no-trade path costs "
-        "nothing but the work already done. Size within the cap; "
-        "conviction was earned upstream, not here. The mandate:\n\n"
-        + ctx.mandate_text
-        + "\n\nReturn STRICT JSON only, matching:\n"
-        + json.dumps(PortfolioDecision.model_json_schema(), indent=1))
+    decision_system = decision_system_prompt(ctx)
 
     decision = ask_validated(
         ctx, llm, agent="PM - Decision", stage=STAGE,
@@ -62,20 +107,12 @@ def run_pm(ctx, llm, thesis, proposal, constraints):
     escalated = [c for c in decision.compliance
                  if c.status == "escalated"]
     if escalated:
-        hr_system = (
-            "You are the Head of Risk. The PM has escalated one or "
-            "more of your signed constraints. Respond: for each "
-            "escalation, either revise the constraint (with the new "
-            "number and why) or hold firm (and why). Your response is "
-            "final — there is exactly one bounce-back round. Return "
-            "STRICT JSON: an updated RiskConstraints object, matching:"
-            "\n" + json.dumps(RiskConstraints.model_json_schema(),
-                              indent=1))
+        hr_system = risk_bounce_system_prompt()
         hr_user = (base + "\n\nThe PM's decision with escalations:\n"
                    + decision.model_dump_json(indent=1))
         constraints = ask_validated(
             ctx, llm, agent="Head of Risk (bounce)", stage=STAGE,
-            node="head-risk",
+            node="head-risk", override_prompt=False,
             system=hr_system, user=hr_user,
             validate=RiskConstraints.model_validate,
             schema_json=json.dumps(
@@ -107,17 +144,7 @@ def run_pm(ctx, llm, thesis, proposal, constraints):
     funding = None
     instruction = None
     if decision.action != "decline":
-        funding_system = (
-            "You are the Portfolio Manager on your second duty — "
-            "PM - Funding: portfolio construction. Make room for the "
-            "decided size from the real book: cash above the 1% floor "
-            "first, then trim the LOWEST-conviction holdings — name "
-            "them, justify each trim by conviction rank and thesis "
-            "state, never trim winners to fund a maybe. Arithmetic "
-            "must close: sources sum to the target; resulting cash "
-            "respects the floor. The mandate:\n\n" + ctx.mandate_text
-            + "\n\nReturn STRICT JSON only, matching:\n"
-            + json.dumps(FundingPlan.model_json_schema(), indent=1))
+        funding_system = funding_system_prompt(ctx)
         funding_user = (
             f"Decided size to fund: {decision.size_pct_nav:g}% NAV.\n\n"
             f"The current book:\n{book}\n\nCurrent cash: read it from "
@@ -135,18 +162,7 @@ def run_pm(ctx, llm, thesis, proposal, constraints):
                      {"agent": "PM - Funding", "stage": STAGE,
                       "structured": funding.model_dump()}))
 
-        instr_system = (
-            "You are the Portfolio Manager on your third duty — "
-            "PM - Instruction. Bind the decision and the funding plan "
-            "into the Dealing Instruction: every leg (entry tranches "
-            "per the proposal's plan, funding trims, any hedge), "
-            "sides, sizes, pacing; the stops the RiskConstraints "
-            "mandate; standing orders; validity. This document goes "
-            "to the Compliance gate and then the desk — it must be "
-            "executable as written. Return STRICT JSON only, "
-            "matching:\n"
-            + json.dumps(DealingInstruction.model_json_schema(),
-                         indent=1))
+        instr_system = instruction_system_prompt()
         instr_user = (
             f"The decision:\n{decision.model_dump_json(indent=1)}\n\n"
             f"The funding plan:\n{funding.model_dump_json(indent=1)}"

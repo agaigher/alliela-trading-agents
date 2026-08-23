@@ -160,27 +160,48 @@ config for the whole process, this is **one fund's owner editing their
 own desks** from the portal. The two do not interact.
 
 `RunContext.agent_overrides` maps a **graph_spec node id** to
-`{model, prompt, output_guidance}`. It is applied in exactly one place
-— `ask_validated`, which every stage already funnels through — so a new
+`{model, prompt}`. It is applied in exactly one place —
+`ask_validated`, which every stage already funnels through — so a new
 stage inherits the behaviour by construction and no stage has to know
-overrides exist. Every call site now passes `node=<graph_spec id>`;
-`alliela/graph_spec.py` and the call sites are checked against each
-other (no unknown ids, no agent without a hook).
+overrides exist. Every call site passes `node=<graph_spec id>`, checked
+against the spec both ways (no unknown ids, no agent without a hook).
+
+**The editor is prefilled with the agent's real prompt**, which is why
+`alliela/prompts.py` exists: `default_prompt(node_id)` returns the
+exact system prompt that agent runs on. An empty box invites an owner
+to replace a careful brief with one sentence and silently lose every
+rule the desk had.
+
+To make that possible, all 14 inline system prompts were **lifted to
+module-level functions** (`*_system_prompt`), following the convention
+`thesis.manager_system_prompt` already set for the Prompt Auditor. The
+lift was done by moving the expression source, never retyping it, and
+verified by evaluating the pre-refactor expressions and diffing:
+**all 14 byte-identical**. Keep prompts there — a prompt the engine can
+hand out is a prompt something else can read.
 
 What the owner may change:
 
 - **`model`** — from `MODEL_CHOICES` only. A free-text model field is
   an unbounded bill: one confident string and a fund runs 60-odd calls
-  against the dearest endpoint on OpenRouter. A model that is no longer
-  in the list is **ignored, not raised** — a retired model must not
-  brick every future run of a fund that once selected it.
-- **`prompt`** — replaces the agent's brief outright. The engine
-  re-attaches the JSON contract from the `schema_json` the caller
-  already passes, so an owner cannot delete the paragraph that keeps
-  the document parseable. Prose agents (the Bull/Bear debate turns)
-  pass no schema and correctly get none appended.
-- **`output_guidance`** — appended. It directs what goes in the
-  document, never its shape: later desks read those fields by name.
+  against the dearest endpoint on OpenRouter. A model no longer in the
+  list is **ignored, not raised** — a retired model must not brick
+  every future run of a fund that once selected it.
+- **`prompt`** — the whole system prompt, contract included. Run-time
+  values stay as `{fund_name}` / `{mandate}` / `{tip}` and are
+  substituted at run start (`overrides._fill`, plain `str.replace` —
+  these prompts are full of JSON braces). **Storing the mandate text
+  instead of the token would freeze a copy of it**, so an owner editing
+  their mandate later would leave the agent reading the old one.
+  If an owner deletes the schema, the engine puts one back: every JSON
+  Schema dump contains `"properties"`, so its absence is the test.
+
+**Secondary duties** (`SECONDARY_DUTIES`): the Head of Idea Generation
+also reviews the desk books, and the Head of Risk also answers the PM's
+escalation — both on *different* prompts from the one the owner edits.
+Those call sites pass `override_prompt=False`, so they take the model
+override but keep their own instructions. Putting a compile prompt on a
+review call would be a silent mis-instruction.
 
 What is deliberately **not** overridable:
 

@@ -13,13 +13,8 @@ from alliela.structured import ask_validated
 STAGE = "Execution"
 
 
-def run_execution(ctx, llm, instruction):
-    """Returns (documents, calls, report)."""
-    calls = []
-    tickers = sorted({l.ticker for l in instruction.legs})
-    snapshots = {t: ticker_snapshot(t) for t in tickers}
-
-    system = (
+def execution_system_prompt(ctx):
+    return (
         f"You are the Trading Desk of {ctx.fund_name} on your second "
         "duty: Execution, on a closed paper book marked against real "
         "prices. Execute the Dealing Instruction: day-1 fills happen "
@@ -31,6 +26,15 @@ def run_execution(ctx, llm, instruction):
         "instruction paces beyond today. List every stop you placed. "
         "Return STRICT JSON only, matching:\n"
         + json.dumps(ExecutionReport.model_json_schema(), indent=1))
+
+
+def run_execution(ctx, llm, instruction):
+    """Returns (documents, calls, report)."""
+    calls = []
+    tickers = sorted({l.ticker for l in instruction.legs})
+    snapshots = {t: ticker_snapshot(t) for t in tickers}
+
+    system = execution_system_prompt(ctx)
     user = (
         f"As-of date: {ctx.trade_date}.\n\n"
         f"The Dealing Instruction (compliance-released):\n"

@@ -64,7 +64,7 @@ def _packs(brief, trade_date):
     }
 
 
-def _analyst_system(name, lens, mandate, fund_name):
+def analyst_system_prompt(name, lens, mandate, fund_name):
     return (
         f"You are the {name} on {fund_name}'s Analyst team. Your "
         f"lens, and only your lens: {lens}\n\n"
@@ -76,6 +76,19 @@ def _analyst_system(name, lens, mandate, fund_name):
         "table, honest gaps. The mandate for context:\n\n" + mandate
         + "\n\nReturn STRICT JSON only, matching this schema:\n"
         + json.dumps(AnalystReport.model_json_schema(), indent=1))
+
+
+def lead_system_prompt():
+    return (
+        "You are the Analyst Lead. Audit each report against its "
+        "brief: does it answer end to end, are claims grounded in "
+        "cited evidence (specific numbers, dates, sources), are "
+        "coverage gaps honest rather than papered over, does it stay "
+        "in its lane? Score 1-10 and write actionable revision "
+        "requests — each specialist gets exactly one revision pass. "
+        "Return STRICT JSON matching:\n"
+        + json.dumps(AnalystRevisionNotes.model_json_schema(),
+                     indent=1))
 
 
 def run_analysts(ctx, llm, brief):
@@ -100,22 +113,13 @@ def run_analysts(ctx, llm, brief):
                 f"{json.dumps(packs[key], indent=1)}\n\n"
                 f"Write the {TITLES[key]} (report_type: '{key}').")
         reports[key] = ask(name,
-                           _analyst_system(name, lens,
+                           analyst_system_prompt(name, lens,
                                            ctx.mandate_text,
                                            ctx.fund_name),
                            user, AnalystReport, node=key)
 
     # 5: the Lead audits all four
-    lead_system = (
-        "You are the Analyst Lead. Audit each report against its "
-        "brief: does it answer end to end, are claims grounded in "
-        "cited evidence (specific numbers, dates, sources), are "
-        "coverage gaps honest rather than papered over, does it stay "
-        "in its lane? Score 1-10 and write actionable revision "
-        "requests — each specialist gets exactly one revision pass. "
-        "Return STRICT JSON matching:\n"
-        + json.dumps(AnalystRevisionNotes.model_json_schema(),
-                     indent=1))
+    lead_system = lead_system_prompt()
     lead_user = (f"The Idea Brief:\n{brief_json}\n\nThe four reports:"
                  + "".join(f"\n\n## {TITLES[k]}\n"
                            + reports[k].model_dump_json(indent=1)
@@ -138,7 +142,7 @@ def run_analysts(ctx, llm, brief):
                 f"Return the full revised report as STRICT JSON, same "
                 f"schema.")
         reports[key] = ask(name,
-                           _analyst_system(name, lens,
+                           analyst_system_prompt(name, lens,
                                            ctx.mandate_text,
                                            ctx.fund_name),
                            user, AnalystReport, node=key)

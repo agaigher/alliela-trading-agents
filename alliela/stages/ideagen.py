@@ -36,7 +36,7 @@ def _json_msg(system, user):
             {"role": "user", "content": user}]
 
 
-def _desk_system(desk_name, lens, mandate, tip, fund_name):
+def desk_system_prompt(desk_name, lens, mandate, tip, fund_name):
     tipline = (f'The firm\'s standing theme instruction for this run: '
                f'"{tip}". A tip focuses the scan; it never overrides '
                f'a mandate limit.' if tip else
@@ -54,6 +54,27 @@ def _desk_system(desk_name, lens, mandate, tip, fund_name):
         "tradability honestly. Return STRICT JSON only, no prose "
         "around it, matching this schema:\n"
         + json.dumps(IdeaBook.model_json_schema(), indent=1))
+
+
+def head_review_system_prompt():
+    return (
+        "You are the Head of Idea Generation. You do NOT pick winners "
+        "— selection is the Selection Committee's job. You review each "
+        "desk's book for: evidence discipline (every claim sourced), "
+        "mandate fit (universe, liquidity, shorting rules), edge "
+        "clarity, and overlap across desks. Return STRICT JSON: a list "
+        "of three objects matching this schema:\n"
+        + json.dumps(RevisionNote.model_json_schema(), indent=1))
+
+
+def head_compile_system_prompt():
+    return (
+        "You are the Head of Idea Generation compiling the revised "
+        "books into the Combined Ideas Book. Merge duplicates and "
+        "note the overlaps; write an honest coverage note (what the "
+        "scan covered, what it deliberately did not). Do NOT rank — "
+        "the book is unranked by design. Return STRICT JSON matching:\n"
+        + json.dumps(CombinedIdeasBook.model_json_schema(), indent=1))
 
 
 def run_ideagen(ctx, llm):
@@ -80,26 +101,20 @@ def run_ideagen(ctx, llm):
                 f"context (verify nothing here blindly — they are "
                 f"leads, not evidence):\n\n{news}\n\n"
                 f"Produce the {name}'s ideas book.")
-        books[key] = ask(f"{name}", _desk_system(name, lens,
+        books[key] = ask(f"{name}", desk_system_prompt(name, lens,
                                                  ctx.mandate_text, tip,
                                                  ctx.fund_name),
                          user, IdeaBook, node=key)
 
     # 4: Head reviews all three books, one revision round
-    head_sys = (
-        "You are the Head of Idea Generation. You do NOT pick winners "
-        "— selection is the Selection Committee's job. You review each "
-        "desk's book for: evidence discipline (every claim sourced), "
-        "mandate fit (universe, liquidity, shorting rules), edge "
-        "clarity, and overlap across desks. Return STRICT JSON: a list "
-        "of three objects matching this schema:\n"
-        + json.dumps(RevisionNote.model_json_schema(), indent=1))
+    head_sys = head_review_system_prompt()
     head_user = "The three books:\n\n" + "\n\n".join(
         f"## {name}\n" + books[key].model_dump_json(indent=1)
         for key, name, _ in DESKS)
     notes = ask_validated(
         ctx, llm, agent="Head of Idea Generation", stage=STAGE,
-        node="head-ideagen", system=head_sys, user=head_user,
+        node="head-ideagen", override_prompt=False,
+        system=head_sys, user=head_user,
         validate=lambda data: [RevisionNote.model_validate(n)
                                for n in data],
         schema_json=json.dumps(
@@ -120,19 +135,13 @@ def run_ideagen(ctx, llm):
                 f"\n\nRevise the book. Address every note; drop "
                 f"candidates that cannot survive the notes. Return the "
                 f"full revised book as STRICT JSON, same schema.")
-        books[key] = ask(name, _desk_system(name, lens,
+        books[key] = ask(name, desk_system_prompt(name, lens,
                                             ctx.mandate_text, tip,
                                             ctx.fund_name),
                          user, IdeaBook, node=key)
 
     # 8: Head compiles the Combined Ideas Book (unranked)
-    compile_sys = (
-        "You are the Head of Idea Generation compiling the revised "
-        "books into the Combined Ideas Book. Merge duplicates and "
-        "note the overlaps; write an honest coverage note (what the "
-        "scan covered, what it deliberately did not). Do NOT rank — "
-        "the book is unranked by design. Return STRICT JSON matching:\n"
-        + json.dumps(CombinedIdeasBook.model_json_schema(), indent=1))
+    compile_sys = head_compile_system_prompt()
     compile_user = "The three revised books:\n\n" + "\n\n".join(
         f"## {name}\n" + books[key].model_dump_json(indent=1)
         for key, name, _ in DESKS)

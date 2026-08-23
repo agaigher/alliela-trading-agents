@@ -13,7 +13,8 @@ are the parts the code does not currently declare — and the honest place
 to notice that is here, not in a React component.
 """
 from alliela.context import RunContext
-from alliela.overrides import MODEL_CHOICES
+from alliela.overrides import MODEL_CHOICES, SECONDARY_DUTIES
+from alliela.prompts import default_prompt
 from alliela.stages.analysts import ANALYSTS
 from alliela.stages.ideagen import DESKS
 from alliela.stages.risk import LENSES as RISK_LENSES
@@ -123,6 +124,12 @@ def pipeline_spec():
                 "name": name, "model_tier": tier_model,
                 "brief": brief.strip(),
                 "default_model": TIER_MODEL[tier_model],
+                # The exact text this agent runs on, with the run-time
+                # values left as {fund_name} / {mandate} / {tip}. The
+                # portal prefills its editor from this, so an owner
+                # edits the real prompt rather than a blank box.
+                "default_prompt": default_prompt(key),
+                "second_duty": SECONDARY_DUTIES.get(key),
                 "derived": sid in DERIVED and key in
                            [m[0] for m in DERIVED.get(sid, [])],
             })

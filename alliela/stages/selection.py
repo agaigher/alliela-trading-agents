@@ -62,6 +62,36 @@ def _msgs(system, user):
             {"role": "user", "content": user}]
 
 
+def lens_system_prompt(ctx, agent, lens, lens_rules):
+    return (
+        f"You are the {agent} of {ctx.fund_name}'s Selection "
+        f"Committee. You judge EVERY candidate through exactly one "
+        f"lens — {lens} — and nothing else.\n\nLens rules: "
+        f"{lens_rules.format(adv_floor=_adv_floor(ctx))}"
+        f"\n\nThe mandate (universe, liquidity floor, "
+        f"shorting rules) binds:\n\n{ctx.mandate_text}\n\n"
+        "Score every candidate 1-5 through your lens, mark fatal "
+        "flags per your rules, keep rationales to two sentences. "
+        "Return STRICT JSON only, matching this schema:\n"
+        + json.dumps(Scorecard.model_json_schema(), indent=1))
+
+
+def chair_system_prompt():
+    return (
+        "You are the Chair of the Selection Committee. Aggregate the "
+        "three scorecards BY JUDGMENT, never by summing scores: a "
+        "fatal flag in any lens eliminates that candidate outright; "
+        "among survivors, weigh the lenses as the situation demands "
+        "and force a ranking. Select exactly ONE idea (one idea per "
+        "run) and write the Idea Brief the Analyst team kicks off "
+        "from: catalyst, rationale, what the analysts must verify "
+        "first, and the ranked rejects with honest reasons. If no "
+        "candidate survives, say so (viable=false) — a no-trade run "
+        "is a first-class outcome. Remember: edge scores are triage "
+        "and expire downstream. Return STRICT JSON matching:\n"
+        + json.dumps(IdeaBrief.model_json_schema(), indent=1))
+
+
 def run_selection(ctx, llm, combined):
     """Returns (documents, calls, brief)."""
     calls, docs = [], []
@@ -79,17 +109,7 @@ def run_selection(ctx, llm, combined):
 
     cards = {}
     for key, agent, lens, lens_rules in LENSES:
-        system = (
-            f"You are the {agent} of {ctx.fund_name}'s Selection "
-            f"Committee. You judge EVERY candidate through exactly one "
-            f"lens — {lens} — and nothing else.\n\nLens rules: "
-            f"{lens_rules.format(adv_floor=_adv_floor(ctx))}"
-            f"\n\nThe mandate (universe, liquidity floor, "
-            f"shorting rules) binds:\n\n{ctx.mandate_text}\n\n"
-            "Score every candidate 1-5 through your lens, mark fatal "
-            "flags per your rules, keep rationales to two sentences. "
-            "Return STRICT JSON only, matching this schema:\n"
-            + json.dumps(Scorecard.model_json_schema(), indent=1))
+        system = lens_system_prompt(ctx, agent, lens, lens_rules)
         user = (f"As-of date: {ctx.trade_date}.\n\nThe Combined Ideas "
                 f"Book candidates:\n{json.dumps(candidates, indent=1)}")
         if lens == "feasibility":
@@ -98,19 +118,7 @@ def run_selection(ctx, llm, combined):
                      + json.dumps(snapshots, indent=1))
         cards[key] = ask(agent, system, user, Scorecard, node=key)
 
-    chair_system = (
-        "You are the Chair of the Selection Committee. Aggregate the "
-        "three scorecards BY JUDGMENT, never by summing scores: a "
-        "fatal flag in any lens eliminates that candidate outright; "
-        "among survivors, weigh the lenses as the situation demands "
-        "and force a ranking. Select exactly ONE idea (one idea per "
-        "run) and write the Idea Brief the Analyst team kicks off "
-        "from: catalyst, rationale, what the analysts must verify "
-        "first, and the ranked rejects with honest reasons. If no "
-        "candidate survives, say so (viable=false) — a no-trade run "
-        "is a first-class outcome. Remember: edge scores are triage "
-        "and expire downstream. Return STRICT JSON matching:\n"
-        + json.dumps(IdeaBrief.model_json_schema(), indent=1))
+    chair_system = chair_system_prompt()
     chair_user = (
         f"Candidates:\n{json.dumps(candidates, indent=1)}\n\n"
         f"Verified market data:\n{json.dumps(snapshots, indent=1)}\n\n"

@@ -17,13 +17,8 @@ from alliela.structured import ask_validated
 STAGE = "Pre-Trade Structuring"
 
 
-def run_structuring(ctx, llm, thesis, reports):
-    """Returns (documents, calls, proposal)."""
-    calls = []
-    snapshot = ticker_snapshot(thesis.ticker)
-    positioning = reports["sentiment"].model_dump()
-
-    system = (
+def structuring_system_prompt(ctx):
+    return (
         f"You are the Trading Desk of {ctx.fund_name}, on your first "
         "duty: Pre-Trade Structuring. Turn the Thesis into a concrete, "
         "executable Transaction Proposal. Rules: size within the "
@@ -40,6 +35,15 @@ def run_structuring(ctx, llm, thesis, reports):
         + "\n\nReturn STRICT JSON only, matching:\n"
         + json.dumps(TransactionProposal.model_json_schema(),
                      indent=1))
+
+
+def run_structuring(ctx, llm, thesis, reports):
+    """Returns (documents, calls, proposal)."""
+    calls = []
+    snapshot = ticker_snapshot(thesis.ticker)
+    positioning = reports["sentiment"].model_dump()
+
+    system = structuring_system_prompt(ctx)
     user = (
         f"As-of date: {ctx.trade_date}.\n\n"
         f"The Thesis:\n{thesis.model_dump_json(indent=1)}\n\n"

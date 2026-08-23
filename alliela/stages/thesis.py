@@ -44,7 +44,7 @@ def _msgs(system, user):
             {"role": "user", "content": user}]
 
 
-def _debater_system(side, ctx):
+def debater_system_prompt(side, ctx):
     stance = (f"You are the Bull on {ctx.fund_name}'s Thesis Desk, "
               "advocating FOR the position. Build the strongest "
               "evidence-based case for the idea and dismantle the "
@@ -62,6 +62,18 @@ def _debater_system(side, ctx):
         "material. Conversational debate prose, 300-450 words per "
         "turn — no JSON, no headers, no bullet lists. The mandate "
         "binds sizing and universe questions:\n\n" + ctx.mandate_text)
+
+
+def premortem_system_prompt(ctx):
+    return (
+        f"You are the Pre-mortem on {ctx.fund_name}'s Thesis Desk. It is "
+        "twelve months from the as-of date and the position has FAILED. "
+        "You are not arguing against the trade — it was made. Explain, "
+        "as retrospective fact, why it broke: the failure modes "
+        "adversarial debate misses, each with the early signal that "
+        "would have shown it first. Return STRICT JSON only, matching:"
+        "\n" + json.dumps(PreMortemReview.model_json_schema(),
+                          indent=1))
 
 
 def run_thesis(ctx, llm, brief, reports):
@@ -98,7 +110,7 @@ def run_thesis(ctx, llm, brief, reports):
                     f"(frozen — the debate adds no new data):\n\n"
                     f"{evidence}\n\nDebate so far:\n\n{history}\n\n"
                     f"Round {rnd + 1} of {ROUNDS}. Your turn.")
-            cap = call_text(side, _debater_system(side, ctx), user,
+            cap = call_text(side, debater_system_prompt(side, ctx), user,
                             node=side.lower())
             turns.append((side, cap.text.strip()))
 
@@ -117,15 +129,7 @@ def run_thesis(ctx, llm, brief, reports):
         calls=calls)
 
     # 8: Pre-mortem (deep reasoning) — prospective hindsight
-    premortem_system = (
-        f"You are the Pre-mortem on {ctx.fund_name}'s Thesis Desk. It is "
-        "twelve months from the as-of date and the position has FAILED. "
-        "You are not arguing against the trade — it was made. Explain, "
-        "as retrospective fact, why it broke: the failure modes "
-        "adversarial debate misses, each with the early signal that "
-        "would have shown it first. Return STRICT JSON only, matching:"
-        "\n" + json.dumps(PreMortemReview.model_json_schema(),
-                          indent=1))
+    premortem_system = premortem_system_prompt(ctx)
     premortem = ask_validated(
         ctx, llm, agent="Pre-mortem", stage=STAGE, node="premortem",
         system=premortem_system,

@@ -9,16 +9,22 @@ from alliela.overrides import resolve_model, resolve_system
 
 def ask_validated(ctx, llm, *, agent, stage, system, user, validate,
                   schema_json, model=None, reasoning=None, calls=None,
-                  node=None):
+                  node=None, override_prompt=True):
     """validate: parsed-JSON -> result (raise on invalid).
     Returns the validated result; captured calls are appended to
     `calls` and streamed to ctx.sink.
 
     node: the graph_spec node id, so the fund owner's overrides for
-    this agent can be applied. Omitted = ships as written."""
+    this agent can be applied. Omitted = ships as written.
+
+    override_prompt=False: this is the agent's SECOND duty and runs on
+    a different prompt from the one the owner edits, so take their
+    model but not their instructions (alliela.overrides
+    SECONDARY_DUTIES)."""
     # The owner's overrides land here, at the single point every
     # stage passes through, so no stage has to know they exist.
-    system = resolve_system(ctx, node, system, schema_json)
+    if override_prompt:
+        system = resolve_system(ctx, node, system, schema_json)
     model = resolve_model(ctx, node, model) or ctx.quick_model
 
     def _record(cap):
