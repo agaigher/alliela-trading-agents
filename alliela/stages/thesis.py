@@ -12,6 +12,7 @@ import json
 
 from alliela.documents import (PreMortemReview, Thesis, debate_doc_html,
                                transcript_html)
+from alliela.overrides import resolve_model, resolve_system
 from alliela.structured import ask_validated
 
 STAGE = "Thesis Desk"
@@ -74,9 +75,12 @@ def run_thesis(ctx, llm, brief, reports):
             + reports[k].model_dump_json(indent=1)
             for k in ("market", "sentiment", "news", "fundamentals")))
 
-    def call_text(agent, system, user, reasoning=None):
-        cap = llm.call(model=ctx.deep_model,
-                       messages=_msgs(system, user),
+    def call_text(agent, system, user, reasoning=None, node=None):
+        # Prose turns, so no schema is passed: the owner's prompt
+        # replaces the brief outright rather than gaining a contract.
+        cap = llm.call(model=resolve_model(ctx, node, ctx.deep_model),
+                       messages=_msgs(resolve_system(ctx, node, system),
+                                      user),
                        agent=agent, stage=STAGE, seq=ctx.next_seq(),
                        reasoning=reasoning)
         calls.append(cap)
@@ -94,7 +98,8 @@ def run_thesis(ctx, llm, brief, reports):
                     f"(frozen — the debate adds no new data):\n\n"
                     f"{evidence}\n\nDebate so far:\n\n{history}\n\n"
                     f"Round {rnd + 1} of {ROUNDS}. Your turn.")
-            cap = call_text(side, _debater_system(side, ctx), user)
+            cap = call_text(side, _debater_system(side, ctx), user,
+                            node=side.lower())
             turns.append((side, cap.text.strip()))
 
     # 7: Research Manager judges (deep reasoning)
@@ -102,6 +107,7 @@ def run_thesis(ctx, llm, brief, reports):
     transcript_text = "\n\n".join(f"[{s}]\n{t}" for s, t in turns)
     thesis = ask_validated(
         ctx, llm, agent="Research Manager", stage=STAGE,
+        node="research-manager",
         system=manager_system,
         user=(f"As-of date: {ctx.trade_date}.\n\nThe evidence:\n\n"
               f"{evidence}\n\nThe full debate:\n\n{transcript_text}"),
@@ -121,7 +127,7 @@ def run_thesis(ctx, llm, brief, reports):
         "\n" + json.dumps(PreMortemReview.model_json_schema(),
                           indent=1))
     premortem = ask_validated(
-        ctx, llm, agent="Pre-mortem", stage=STAGE,
+        ctx, llm, agent="Pre-mortem", stage=STAGE, node="premortem",
         system=premortem_system,
         user=(f"The Thesis:\n{thesis.model_dump_json(indent=1)}\n\n"
               f"The evidence:\n\n{evidence}"),

@@ -4,13 +4,22 @@ call (quick model) before giving up. The repair call is archived like
 any other call; a stage's call count grows honestly when repair fires."""
 import json
 
+from alliela.overrides import resolve_model, resolve_system
+
 
 def ask_validated(ctx, llm, *, agent, stage, system, user, validate,
-                  schema_json, model=None, reasoning=None, calls=None):
+                  schema_json, model=None, reasoning=None, calls=None,
+                  node=None):
     """validate: parsed-JSON -> result (raise on invalid).
     Returns the validated result; captured calls are appended to
-    `calls` and streamed to ctx.sink."""
-    model = model or ctx.quick_model
+    `calls` and streamed to ctx.sink.
+
+    node: the graph_spec node id, so the fund owner's overrides for
+    this agent can be applied. Omitted = ships as written."""
+    # The owner's overrides land here, at the single point every
+    # stage passes through, so no stage has to know they exist.
+    system = resolve_system(ctx, node, system, schema_json)
+    model = resolve_model(ctx, node, model) or ctx.quick_model
 
     def _record(cap):
         if calls is not None:

@@ -51,6 +51,7 @@ def run_pm(ctx, llm, thesis, proposal, constraints):
 
     decision = ask_validated(
         ctx, llm, agent="PM - Decision", stage=STAGE,
+        node="pm-decision",
         system=decision_system, user=base,
         validate=PortfolioDecision.model_validate,
         schema_json=json.dumps(PortfolioDecision.model_json_schema()),
@@ -74,6 +75,7 @@ def run_pm(ctx, llm, thesis, proposal, constraints):
                    + decision.model_dump_json(indent=1))
         constraints = ask_validated(
             ctx, llm, agent="Head of Risk (bounce)", stage=STAGE,
+            node="head-risk",
             system=hr_system, user=hr_user,
             validate=RiskConstraints.model_validate,
             schema_json=json.dumps(
@@ -89,6 +91,7 @@ def run_pm(ctx, llm, thesis, proposal, constraints):
             "action must be 'decline'.")
         decision = ask_validated(
             ctx, llm, agent="PM - Decision (final)", stage=STAGE,
+            node="pm-decision",
             system=decision_system, user=final_user,
             validate=PortfolioDecision.model_validate,
             schema_json=json.dumps(
@@ -122,6 +125,7 @@ def run_pm(ctx, llm, thesis, proposal, constraints):
             f"(floor 1.0%).")
         funding = ask_validated(
             ctx, llm, agent="PM - Funding", stage=STAGE,
+            node="pm-funding",
             system=funding_system, user=funding_user,
             validate=FundingPlan.model_validate,
             schema_json=json.dumps(FundingPlan.model_json_schema()),
@@ -152,6 +156,7 @@ def run_pm(ctx, llm, thesis, proposal, constraints):
             f"{constraints.model_dump_json(indent=1)}")
         instruction = ask_validated(
             ctx, llm, agent="PM - Instruction", stage=STAGE,
+            node="pm-instruction",
             system=instr_system, user=instr_user,
             validate=DealingInstruction.model_validate,
             schema_json=json.dumps(

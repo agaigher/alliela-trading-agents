@@ -70,12 +70,12 @@ def run_selection(ctx, llm, combined):
     # real verification pack — fetched deterministically, injected
     snapshots = [ticker_snapshot(c.ticker) for c in combined.candidates]
 
-    def ask(agent, system, user, schema_cls):
+    def ask(agent, system, user, schema_cls, node=None):
         return ask_validated(
             ctx, llm, agent=agent, stage=STAGE, system=system,
             user=user, validate=schema_cls.model_validate,
             schema_json=json.dumps(schema_cls.model_json_schema()),
-            calls=calls)
+            calls=calls, node=node)
 
     cards = {}
     for key, agent, lens, lens_rules in LENSES:
@@ -96,7 +96,7 @@ def run_selection(ctx, llm, combined):
             user += ("\n\nVERIFIED market data (real, fetched now — "
                      "trust this over any desk claim):\n"
                      + json.dumps(snapshots, indent=1))
-        cards[key] = ask(agent, system, user, Scorecard)
+        cards[key] = ask(agent, system, user, Scorecard, node=key)
 
     chair_system = (
         "You are the Chair of the Selection Committee. Aggregate the "
@@ -118,7 +118,8 @@ def run_selection(ctx, llm, combined):
             f"## {agent} ({lens})\n"
             + cards[key].model_dump_json(indent=1)
             for key, agent, lens, _ in LENSES))
-    brief = ask("Selection Chair", chair_system, chair_user, IdeaBrief)
+    brief = ask("Selection Chair", chair_system, chair_user,
+                IdeaBrief, node="chair")
 
     titles = {"conviction": "Edge Scorecard",
               "feasibility": "Feasibility Scorecard",

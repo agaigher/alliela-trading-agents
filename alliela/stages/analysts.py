@@ -84,12 +84,12 @@ def run_analysts(ctx, llm, brief):
     packs = _packs(brief, ctx.trade_date)
     brief_json = brief.model_dump_json(indent=1)
 
-    def ask(agent, system, user, schema_cls):
+    def ask(agent, system, user, schema_cls, node=None):
         return ask_validated(
             ctx, llm, agent=agent, stage=STAGE, system=system,
             user=user, validate=schema_cls.model_validate,
             schema_json=json.dumps(schema_cls.model_json_schema()),
-            calls=calls)
+            calls=calls, node=node)
 
     # 1-4: specialist drafts
     reports = {}
@@ -103,7 +103,7 @@ def run_analysts(ctx, llm, brief):
                            _analyst_system(name, lens,
                                            ctx.mandate_text,
                                            ctx.fund_name),
-                           user, AnalystReport)
+                           user, AnalystReport, node=key)
 
     # 5: the Lead audits all four
     lead_system = (
@@ -121,7 +121,7 @@ def run_analysts(ctx, llm, brief):
                            + reports[k].model_dump_json(indent=1)
                            for k, _, _ in ANALYSTS))
     notes = ask("Analyst Lead", lead_system, lead_user,
-                AnalystRevisionNotes)
+                AnalystRevisionNotes, node="analyst-lead")
     audits = {a.report_type: a for a in notes.audits}
 
     # 6-9: one revision pass each
@@ -141,7 +141,7 @@ def run_analysts(ctx, llm, brief):
                            _analyst_system(name, lens,
                                            ctx.mandate_text,
                                            ctx.fund_name),
-                           user, AnalystReport)
+                           user, AnalystReport, node=key)
 
     for key, name, _ in ANALYSTS:
         docs.append((key, TITLES[key], "output",

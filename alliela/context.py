@@ -31,6 +31,11 @@ class RunContext:
     # retrospective inputs (runs, theses, manager traces, judged
     # tickers) — assembled by the runner from the archive
     review_pack: dict = field(default_factory=dict)
+    # Per-node agent overrides the owner set in the portal, keyed by
+    # the graph_spec node id: {"macro": {"model":…, "prompt":…,
+    # "output_guidance":…}}. Empty = every desk runs as shipped.
+    # Applied in alliela.overrides at the one prompt choke point.
+    agent_overrides: dict = field(default_factory=dict)
     quick_model: str = "anthropic/claude-haiku-4.5"
     deep_model: str = "anthropic/claude-sonnet-5"
     pm_model: str = "anthropic/claude-opus-5"   # PM decisions only

@@ -66,12 +66,12 @@ def run_ideagen(ctx, llm):
          "energy transition policy", "grid infrastructure orders"],
         per_query=8)
 
-    def ask(agent, system, user, schema_cls):
+    def ask(agent, system, user, schema_cls, node=None):
         return ask_validated(
             ctx, llm, agent=agent, stage=STAGE, system=system,
             user=user, validate=schema_cls.model_validate,
             schema_json=json.dumps(schema_cls.model_json_schema()),
-            calls=calls)
+            calls=calls, node=node)
 
     # 1-3: desk drafts
     books = {}
@@ -83,7 +83,7 @@ def run_ideagen(ctx, llm):
         books[key] = ask(f"{name}", _desk_system(name, lens,
                                                  ctx.mandate_text, tip,
                                                  ctx.fund_name),
-                         user, IdeaBook)
+                         user, IdeaBook, node=key)
 
     # 4: Head reviews all three books, one revision round
     head_sys = (
@@ -99,7 +99,7 @@ def run_ideagen(ctx, llm):
         for key, name, _ in DESKS)
     notes = ask_validated(
         ctx, llm, agent="Head of Idea Generation", stage=STAGE,
-        system=head_sys, user=head_user,
+        node="head-ideagen", system=head_sys, user=head_user,
         validate=lambda data: [RevisionNote.model_validate(n)
                                for n in data],
         schema_json=json.dumps(
@@ -123,7 +123,7 @@ def run_ideagen(ctx, llm):
         books[key] = ask(name, _desk_system(name, lens,
                                             ctx.mandate_text, tip,
                                             ctx.fund_name),
-                         user, IdeaBook)
+                         user, IdeaBook, node=key)
 
     # 8: Head compiles the Combined Ideas Book (unranked)
     compile_sys = (
@@ -137,7 +137,7 @@ def run_ideagen(ctx, llm):
         f"## {name}\n" + books[key].model_dump_json(indent=1)
         for key, name, _ in DESKS)
     combined = ask("Head of Idea Generation", compile_sys,
-                   compile_user, CombinedIdeasBook)
+                   compile_user, CombinedIdeasBook, node="head-ideagen")
 
     # documents
     titles = {"macro": "Macro Ideas Book",

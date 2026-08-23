@@ -39,7 +39,7 @@ def run_execution(ctx, llm, instruction):
         f"{json.dumps(snapshots, indent=1)}")
 
     report = ask_validated(
-        ctx, llm, agent="Execution", stage=STAGE,
+        ctx, llm, agent="Execution", stage=STAGE, node="execution",
         system=system, user=user,
         validate=ExecutionReport.model_validate,
         schema_json=json.dumps(ExecutionReport.model_json_schema()),

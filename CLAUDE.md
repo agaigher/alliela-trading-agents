@@ -153,6 +153,51 @@ instead of two fixed LLM instances. Namespaced OpenRouter IDs inherit the
 capability quirks of their bare counterparts (`capabilities.get_capabilities`
 retries with the segment after the last `/`).
 
+## Per-fund agent overrides (`alliela/overrides.py`, Aug 2026)
+
+Distinct from the vendored framework's `agent_models` above: that is
+config for the whole process, this is **one fund's owner editing their
+own desks** from the portal. The two do not interact.
+
+`RunContext.agent_overrides` maps a **graph_spec node id** to
+`{model, prompt, output_guidance}`. It is applied in exactly one place
+— `ask_validated`, which every stage already funnels through — so a new
+stage inherits the behaviour by construction and no stage has to know
+overrides exist. Every call site now passes `node=<graph_spec id>`;
+`alliela/graph_spec.py` and the call sites are checked against each
+other (no unknown ids, no agent without a hook).
+
+What the owner may change:
+
+- **`model`** — from `MODEL_CHOICES` only. A free-text model field is
+  an unbounded bill: one confident string and a fund runs 60-odd calls
+  against the dearest endpoint on OpenRouter. A model that is no longer
+  in the list is **ignored, not raised** — a retired model must not
+  brick every future run of a fund that once selected it.
+- **`prompt`** — replaces the agent's brief outright. The engine
+  re-attaches the JSON contract from the `schema_json` the caller
+  already passes, so an owner cannot delete the paragraph that keeps
+  the document parseable. Prose agents (the Bull/Bear debate turns)
+  pass no schema and correctly get none appended.
+- **`output_guidance`** — appended. It directs what goes in the
+  document, never its shape: later desks read those fields by name.
+
+What is deliberately **not** overridable:
+
+- **The Compliance gate** has no model — it is rule code reading the
+  mandate's typed limits. The api refuses a prompt for it. The one
+  stage that can stop a trade must not be persuadable.
+- **The mandate.** Instructions are how an agent works, not what it is
+  permitted to do; nothing written here reaches the gate.
+- **Tools.** The engine hands agents prepared context packs and the
+  agents call nothing themselves (see "Internet tools" below). A tool
+  picker would store a preference nothing reads, so the portal says so
+  instead of showing one.
+
+Overrides are read **once** when the worker starts a run and frozen on
+the context, for the same reason the mandate version is pinned: editing
+an agent must not change the rules half way through a run in flight.
+
 ## Discovery tools (Alliela addition)
 
 Three tools for the Idea Generation tier, usable before a ticker is

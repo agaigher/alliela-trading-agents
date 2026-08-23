@@ -12,12 +12,26 @@ and the single-agent stages whose names live inside their prompts. Those
 are the parts the code does not currently declare — and the honest place
 to notice that is here, not in a React component.
 """
+from alliela.context import RunContext
+from alliela.overrides import MODEL_CHOICES
 from alliela.stages.analysts import ANALYSTS
 from alliela.stages.ideagen import DESKS
 from alliela.stages.risk import LENSES as RISK_LENSES
 from alliela.stages.selection import LENSES as SELECTION_LENSES
 
 QUICK, DEEP, PM, NONE = "quick", "deep", "pm", "none"
+
+# What each tier actually resolves to, read off RunContext's own
+# defaults rather than restated — the portal shows a user which model
+# an agent runs on today, and a second copy of these strings would
+# start lying the first time one of them is changed.
+_FIELDS = RunContext.__dataclass_fields__
+TIER_MODEL = {
+    QUICK: _FIELDS["quick_model"].default,
+    DEEP: _FIELDS["deep_model"].default,
+    PM: _FIELDS["pm_model"].default,
+    NONE: None,
+}
 
 STAGES = [
     ("01", "ideagen", "Idea Generation"),
@@ -108,14 +122,77 @@ def pipeline_spec():
                 "id": key, "stage": sid, "stage_title": title,
                 "name": name, "model_tier": tier_model,
                 "brief": brief.strip(),
+                "default_model": TIER_MODEL[tier_model],
                 "derived": sid in DERIVED and key in
                            [m[0] for m in DERIVED.get(sid, [])],
             })
 
-    edges = []
-    order = [s[1] for s in STAGES]
-    for a, b in zip(order, order[1:]):
-        edges.append({"from": a, "to": b, "kind": "flow"})
-    # The loops the flow actually contains, which a straight line hides.
-    edges.append({"from": "compliance", "to": "pm", "kind": "bounce"})
-    return {"stages": stages_out, "nodes": nodes, "edges": edges}
+    # Node-level edges, matching the flow the marketing graph draws
+    # (web/pages/home.py GRAPH_EDGES) and the pipeline actually runs.
+    # Stage-to-stage lines were a lie of convenience: the analysts feed
+    # BOTH the Lead and the debaters, and the desks fan out from one
+    # head rather than from whichever node happened to be last.
+    edges = [(a, b, "flow") for a, b in [
+        ("macro", "head-ideagen"), ("thematic", "head-ideagen"),
+        ("catalyst", "head-ideagen"),
+        ("head-ideagen", "conviction"), ("head-ideagen", "feasibility"),
+        ("head-ideagen", "crowding"),
+        ("conviction", "chair"), ("feasibility", "chair"),
+        ("crowding", "chair"),
+        ("chair", "market"), ("chair", "sentiment"),
+        ("chair", "news"), ("chair", "fundamentals"),
+        ("market", "analyst-lead"), ("sentiment", "analyst-lead"),
+        ("news", "analyst-lead"), ("fundamentals", "analyst-lead"),
+        # the frozen reports feed both debaters directly
+        ("market", "bull"), ("sentiment", "bull"),
+        ("news", "bull"), ("fundamentals", "bull"),
+        ("market", "bear"), ("sentiment", "bear"),
+        ("news", "bear"), ("fundamentals", "bear"),
+        ("bull", "research-manager"), ("bear", "research-manager"),
+        ("research-manager", "premortem"),
+        # the thesis contains the pre-mortem, so the desk hears from the
+        # manager — there is no separate premortem handoff
+        ("research-manager", "structuring"),
+        ("structuring", "liquidity"), ("structuring", "concentration"),
+        ("structuring", "drawdown"),
+        # three lenses debate, one Head carries the constraints
+        ("liquidity", "head-risk"), ("concentration", "head-risk"),
+        ("drawdown", "head-risk"),
+        ("head-risk", "pm-decision"),
+        ("pm-decision", "pm-funding"),
+        ("pm-funding", "pm-instruction"),
+        ("pm-instruction", "compliance"),
+        ("compliance", "execution"),
+    ]]
+
+    # Loops the straight line hides. rounds=None means "as many times as
+    # it fails" — a compliance breach returns a new decision, not a
+    # quietly edited instruction.
+    for src, dst, kind, rounds in [
+        ("head-ideagen", "macro", "review", 1),
+        ("head-ideagen", "thematic", "review", 1),
+        ("head-ideagen", "catalyst", "review", 1),
+        ("analyst-lead", "market", "review", 1),
+        ("analyst-lead", "sentiment", "review", 1),
+        ("analyst-lead", "news", "review", 1),
+        ("analyst-lead", "fundamentals", "review", 1),
+        ("bull", "bear", "debate", 3),
+        ("pm-decision", "head-risk", "bounce", 1),
+        ("compliance", "pm-decision", "bounce", None),
+    ]:
+        edges.append((src, dst, kind, rounds))
+
+    edges = [
+        {"from": e[0], "to": e[1], "kind": e[2],
+         "rounds": (e[3] if len(e) > 3 else None)}
+        for e in edges
+    ]
+    return {
+        "stages": stages_out,
+        "nodes": nodes,
+        "edges": edges,
+        # The models an owner may pick from. A list, not a text box:
+        # see alliela/overrides.py on why.
+        "models": [{"id": m, "name": n, "note": note}
+                   for m, n, note in MODEL_CHOICES],
+    }

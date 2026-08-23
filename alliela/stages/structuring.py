@@ -49,7 +49,7 @@ def run_structuring(ctx, llm, thesis, reports):
         f"{json.dumps(positioning, indent=1)}")
 
     proposal = ask_validated(
-        ctx, llm, agent="Trading Desk", stage=STAGE,
+        ctx, llm, agent="Trading Desk", stage=STAGE, node="structuring",
         system=system, user=user,
         validate=TransactionProposal.model_validate,
         schema_json=json.dumps(TransactionProposal.model_json_schema()),

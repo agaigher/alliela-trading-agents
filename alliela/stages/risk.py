@@ -75,7 +75,8 @@ def run_risk(ctx, llm, thesis, proposal):
             for k in views) or "(you open the panel)"
         user = base_context + f"\n\nPrior lens views:\n\n{prior}"
         views[key] = ask_validated(
-            ctx, llm, agent=lens_name, stage=STAGE, system=system,
+            ctx, llm, agent=lens_name, stage=STAGE, node=key,
+            system=system,
             user=user, validate=RiskView.model_validate,
             schema_json=json.dumps(RiskView.model_json_schema()),
             model=ctx.deep_model, calls=calls)
@@ -98,7 +99,7 @@ def run_risk(ctx, llm, thesis, proposal):
                     f"{views[k].model_dump_json(indent=1)}"
                     for k, _, _ in LENSES)
     constraints = ask_validated(
-        ctx, llm, agent="Head of Risk", stage=STAGE,
+        ctx, llm, agent="Head of Risk", stage=STAGE, node="head-risk",
         system=head_system, user=head_user,
         validate=RiskConstraints.model_validate,
         schema_json=json.dumps(RiskConstraints.model_json_schema()),
