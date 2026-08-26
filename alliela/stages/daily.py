@@ -24,9 +24,86 @@ from alliela.documents import (DailyPortfolioNote, DailyRiskReport,
 from alliela.market import context_pack, ticker_snapshot
 from alliela.structured import ask_validated
 
+HONESTY = ("Data status: position cost bases and thesis notes may "
+           "be seeded mock (the fund's backstory); the snapshots "
+           "are REAL prices fetched now. State this distinction "
+           "where it matters; never dress fiction as fact.")
+
+
 STAGE_INTEL = "Intelligence Duties"
 STAGE_VERDICTS = "Position Verdicts"
 STAGE_REVIEW = "Portfolio Review"
+
+
+def market_context_system_prompt():
+    return (
+        "You are the Market Context duty of the daily loop — the "
+        "outside world, one pass, whole book. Work only from the "
+        "injected headlines and snapshots. " + HONESTY
+        + " Return STRICT JSON matching:\n"
+        + json.dumps(MarketContextBrief.model_json_schema(), indent=1))
+
+
+def risk_report_system_prompt():
+    return (
+        "You are the Daily Risk Report duty — the three origination "
+        "risk lenses re-checked daily (liquidity, concentration, "
+        "drawdown; one risk language with origination) plus the "
+        "squeeze watch on every short. Judge from the book and the "
+        "real snapshots; name numbers. " + HONESTY
+        + " Return STRICT JSON matching:\n"
+        + json.dumps(DailyRiskReport.model_json_schema(), indent=1))
+
+
+def thesis_check_system_prompt():
+    return (
+        "You are the Thesis Check duty, evaluating ONE position's "
+        "dated kill criteria: fired / approaching / not_fired — "
+        "decidable, not vibes. If the thesis data available is too "
+        "thin to decide, say 'undecidable' and name what is "
+        "missing (that is a process finding, not a failure). "
+        + HONESTY + " Return STRICT JSON matching:\n"
+        + json.dumps(ThesisCheckResult.model_json_schema(),
+                     indent=1))
+
+
+def pnl_review_system_prompt():
+    return (
+        "You are the P&L Attribution duty. For each position: the "
+        "move against its THESIS EXPECTATION, never raw P&L — entry "
+        "price is sunk; up can be off-thesis, down can be on-path. "
+        "Use the real snapshots for current prices. " + HONESTY
+        + " Return STRICT JSON matching:\n"
+        + json.dumps(PnLAttribution.model_json_schema(), indent=1))
+
+
+def position_review_system_prompt():
+    return (
+        "You are the PM's Position Review duty for ONE position: "
+        "Hold · Add · Trim · Exit — quick think, no debate. You "
+        "cannot originate names; an Add beyond the loop's 2% "
+        "guardrail must be 'escalate' (reroutes to origination). "
+        "A fired kill criterion demands action or an explicit "
+        "thesis amendment. " + HONESTY
+        + " Return STRICT JSON matching:\n"
+        + json.dumps(PositionVerdict.model_json_schema(),
+                     indent=1))
+
+
+def portfolio_review_system_prompt():
+    return (
+        "You are the Portfolio Review — the daily loop's only "
+        "deep-think seat, mirroring origination's judgment level. "
+        "Read every duty report and every verdict; override any "
+        "verdict the PORTFOLIO disagrees with (name it and why); own "
+        "the drawdown-state rules and gross/net/cash targets; bind "
+        "the Rebalance Instruction (empty is a first-class answer); "
+        "fire re-underwrite or new-idea triggers toward origination "
+        "where warranted. Loop guardrails bind you: daily turnover "
+        "≤ 10% NAV, ≤ 2% size change per name without re-underwrite, "
+        "no new names. " + HONESTY
+        + " Return STRICT JSON matching:\n"
+        + json.dumps(DailyPortfolioNote.model_json_schema(), indent=1))
 
 
 def run_daily(ctx, llm):
@@ -44,7 +121,7 @@ def run_daily(ctx, llm):
     snaps_json = json.dumps(snapshots, indent=1)
 
     def ask(agent, system, user, schema_cls, calls,
-            model=None, reasoning=None):
+            model=None, reasoning=None, node=None):
         return ask_validated(
             ctx, llm, agent=agent, stage=STAGE_INTEL
             if calls is intel_calls else
@@ -53,24 +130,15 @@ def run_daily(ctx, llm):
             system=system, user=user,
             validate=schema_cls.model_validate,
             schema_json=json.dumps(schema_cls.model_json_schema()),
-            model=model, reasoning=reasoning, calls=calls)
-
-    honesty = ("Data status: position cost bases and thesis notes may "
-               "be seeded mock (the fund's backstory); the snapshots "
-               "are REAL prices fetched now. State this distinction "
-               "where it matters; never dress fiction as fact.")
+            model=model, reasoning=reasoning, calls=calls, node=node)
 
     # 1 — Market Context (book-level)
     mkt = ask(
         "Market Context",
-        "You are the Market Context duty of the daily loop — the "
-        "outside world, one pass, whole book. Work only from the "
-        "injected headlines and snapshots. " + honesty
-        + " Return STRICT JSON matching:\n"
-        + json.dumps(MarketContextBrief.model_json_schema(), indent=1),
+       market_context_system_prompt(),
         f"As-of: {ctx.trade_date}.\n\nHeadlines:\n{news}\n\n"
         f"The book:\n{book_json}\n\nSnapshots (real):\n{snaps_json}",
-        MarketContextBrief, intel_calls)
+        MarketContextBrief, intel_calls, node="market-context")
     docs.append(("market-context", "Market Context Brief", "output",
                  mkt.to_html("Market Context Brief"),
                  {"agent": "Market Context", "stage": STAGE_INTEL,
@@ -79,17 +147,11 @@ def run_daily(ctx, llm):
     # 2 — Daily Risk Report (book-level)
     risk = ask(
         "Risk Report",
-        "You are the Daily Risk Report duty — the three origination "
-        "risk lenses re-checked daily (liquidity, concentration, "
-        "drawdown; one risk language with origination) plus the "
-        "squeeze watch on every short. Judge from the book and the "
-        "real snapshots; name numbers. " + honesty
-        + " Return STRICT JSON matching:\n"
-        + json.dumps(DailyRiskReport.model_json_schema(), indent=1),
+       risk_report_system_prompt(),
         f"As-of: {ctx.trade_date}.\n\nThe book:\n{book_json}\n\n"
         f"Snapshots (real):\n{snaps_json}\n\nMarket context:\n"
         + mkt.model_dump_json(indent=1),
-        DailyRiskReport, intel_calls)
+        DailyRiskReport, intel_calls, node="risk-report")
     docs.append(("daily-risk", "Daily Risk Report", "output",
                  risk.to_html("Daily Risk Report"),
                  {"agent": "Risk Report", "stage": STAGE_INTEL,
@@ -100,19 +162,12 @@ def run_daily(ctx, llm):
     for p in book:
         c = ask(
             "Thesis Check",
-            "You are the Thesis Check duty, evaluating ONE position's "
-            "dated kill criteria: fired / approaching / not_fired — "
-            "decidable, not vibes. If the thesis data available is too "
-            "thin to decide, say 'undecidable' and name what is "
-            "missing (that is a process finding, not a failure). "
-            + honesty + " Return STRICT JSON matching:\n"
-            + json.dumps(ThesisCheckResult.model_json_schema(),
-                         indent=1),
+           thesis_check_system_prompt(),
             f"As-of: {ctx.trade_date}.\n\nThe position:\n"
             f"{json.dumps(p, indent=1, default=str)}\n\n"
             f"Real snapshot:\n"
             f"{json.dumps(snapshots.get(p['ticker']), indent=1)}",
-            ThesisCheckResult, intel_calls)
+            ThesisCheckResult, intel_calls, node="thesis-check")
         checks.append(c)
     docs.append(("thesis-status", "Thesis Status Sheet", "output",
                  thesis_sheet_html("Thesis Status Sheet", checks),
@@ -122,16 +177,11 @@ def run_daily(ctx, llm):
     # 4 — P&L Attribution (one pass, whole book)
     pnl = ask(
         "P&L Review",
-        "You are the P&L Attribution duty. For each position: the "
-        "move against its THESIS EXPECTATION, never raw P&L — entry "
-        "price is sunk; up can be off-thesis, down can be on-path. "
-        "Use the real snapshots for current prices. " + honesty
-        + " Return STRICT JSON matching:\n"
-        + json.dumps(PnLAttribution.model_json_schema(), indent=1),
+       pnl_review_system_prompt(),
         f"As-of: {ctx.trade_date}.\n\nThe book:\n{book_json}\n\n"
         f"Snapshots (real):\n{snaps_json}\n\nFactor context:\n"
         + mkt.model_dump_json(indent=1),
-        PnLAttribution, intel_calls)
+        PnLAttribution, intel_calls, node="pnl-review")
     docs.append(("pnl-attribution", "P&L Attribution", "output",
                  pnl.to_html("P&L Attribution"),
                  {"agent": "P&L Review", "stage": STAGE_INTEL,
@@ -145,15 +195,7 @@ def run_daily(ctx, llm):
         t = p["ticker"]
         v = ask(
             "Position Review",
-            "You are the PM's Position Review duty for ONE position: "
-            "Hold · Add · Trim · Exit — quick think, no debate. You "
-            "cannot originate names; an Add beyond the loop's 2% "
-            "guardrail must be 'escalate' (reroutes to origination). "
-            "A fired kill criterion demands action or an explicit "
-            "thesis amendment. " + honesty
-            + " Return STRICT JSON matching:\n"
-            + json.dumps(PositionVerdict.model_json_schema(),
-                         indent=1),
+           position_review_system_prompt(),
             f"As-of: {ctx.trade_date}.\n\nThe position:\n"
             f"{json.dumps(p, indent=1, default=str)}\n\n"
             f"Thesis check: "
@@ -161,7 +203,7 @@ def run_daily(ctx, llm):
             f"\nP&L note: {pnl_by_ticker.get(t, '(none)')}\n"
             f"Risk report breaches: "
             f"{json.dumps(risk.breaches)}",
-            PositionVerdict, verdict_calls)
+            PositionVerdict, verdict_calls, node="position-review")
         verdicts.append(v)
     docs.append(("position-verdicts", "Position Verdicts", "output",
                  verdicts_html("Position Verdicts", verdicts),
@@ -171,18 +213,7 @@ def run_daily(ctx, llm):
     # 6 — Portfolio Review (the loop's only deep-think call)
     note = ask(
         "Portfolio Review",
-        "You are the Portfolio Review — the daily loop's only "
-        "deep-think seat, mirroring origination's judgment level. "
-        "Read every duty report and every verdict; override any "
-        "verdict the PORTFOLIO disagrees with (name it and why); own "
-        "the drawdown-state rules and gross/net/cash targets; bind "
-        "the Rebalance Instruction (empty is a first-class answer); "
-        "fire re-underwrite or new-idea triggers toward origination "
-        "where warranted. Loop guardrails bind you: daily turnover "
-        "≤ 10% NAV, ≤ 2% size change per name without re-underwrite, "
-        "no new names. " + honesty
-        + " Return STRICT JSON matching:\n"
-        + json.dumps(DailyPortfolioNote.model_json_schema(), indent=1),
+       portfolio_review_system_prompt(),
         f"As-of: {ctx.trade_date}.\n\nThe mandate:\n{ctx.mandate_text}"
         f"\n\nThe book:\n{book_json}\n\nMarket context:\n"
         + mkt.model_dump_json(indent=1)
@@ -193,7 +224,7 @@ def run_daily(ctx, llm):
         + "\n\nPosition verdicts:\n"
         + json.dumps([v.model_dump() for v in verdicts], indent=1),
         DailyPortfolioNote, review_calls, model=ctx.deep_model,
-        reasoning={"max_tokens": 2048})
+        reasoning={"max_tokens": 2048}, node="portfolio-review")
     docs.append(("portfolio-note", "Daily Portfolio Note", "output",
                  note.to_html("Daily Portfolio Note"),
                  {"agent": "Portfolio Review", "stage": STAGE_REVIEW,

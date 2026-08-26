@@ -109,7 +109,7 @@ DERIVED = {
 }
 
 
-def pipeline_spec():
+def _origination():
     """{stages, nodes, edges} for the origination flow."""
     nodes, stages_out = [], []
     for tier, sid, title in STAGES:
@@ -195,9 +195,131 @@ def pipeline_spec():
         for e in edges
     ]
     return {
+        "id": "origination",
+        "title": "Origination",
+        "subtitle": "From a theme to a position. Nine tiers, roughly "
+                    "60 model calls, about fifteen minutes.",
         "stages": stages_out,
         "nodes": nodes,
         "edges": edges,
+    }
+
+
+# ── The management flow (alliela/stages/daily.py) ────────────────────
+#
+# "Origination deliberates, management executes discipline." Fast, no
+# debate: anything that needs arguing escalates back to origination.
+#
+# Authored rather than derived because the duties are not declared as a
+# constant — their identity lives in their prompts, same as the
+# origination stages in AUTHORED above. The EDGES, though, are read off
+# what each duty is actually handed in daily.py, not off the tier
+# order: the Portfolio Review is given every duty report AND every
+# verdict, so it has five inputs, not one.
+DAILY_STAGES = [
+    ("01", "intel", "Intelligence Duties"),
+    ("02", "verdicts", "Position Verdicts"),
+    ("03", "review", "Portfolio Review"),
+    ("04", "daily-compliance", "Compliance"),
+    ("05", "daily-execution", "Execution"),
+]
+
+DAILY_NODES = {
+    "intel": [
+        ("market-context", "Market Context", QUICK,
+         "the outside world in one pass, whole book: headlines and "
+         "real snapshots, no per-name opinion"),
+        ("risk-report", "Risk Report", QUICK,
+         "origination's three risk lenses re-checked daily against the "
+         "live book, plus the squeeze watch on every short"),
+        ("thesis-check", "Thesis Check", QUICK,
+         "one position at a time: the dated kill criteria evaluated "
+         "fired / approaching / not_fired - decidable, not vibes"),
+        ("pnl-review", "P&L Review", QUICK,
+         "the move against each thesis's EXPECTATION, never raw P&L - "
+         "up can be off-thesis, down can be on-path"),
+    ],
+    "verdicts": [
+        ("position-review", "Position Review", QUICK,
+         "the PM's per-position verdict: Hold, Add, Trim, Exit. Cannot "
+         "originate names; an Add past the 2% guardrail escalates"),
+    ],
+    "review": [
+        ("portfolio-review", "Portfolio Review", DEEP,
+         "the loop's only deep-think seat: reads every duty and every "
+         "verdict, may override any of them, binds the Rebalance "
+         "Instruction (empty is a first-class answer)"),
+    ],
+    "daily-compliance": [
+        ("daily-compliance", "Daily Compliance gate", NONE,
+         "deterministic rule code: the mandate's typed limits plus the "
+         "loop's own guardrails, checked at order release"),
+    ],
+    "daily-execution": [
+        ("execution", "Execution", DEEP,
+         "paper fills at verified prices - the same Execution seat "
+         "origination uses, shared rather than duplicated"),
+    ],
+}
+
+DAILY_EDGES = [
+    # Each duty reads what daily.py actually hands it.
+    ("market-context", "risk-report"), ("market-context", "pnl-review"),
+    ("risk-report", "position-review"),
+    ("thesis-check", "position-review"),
+    ("pnl-review", "position-review"),
+    # The Portfolio Review is given the four duty reports as well as
+    # the verdicts, so a line straight from Position Review alone would
+    # understate what it reads.
+    ("market-context", "portfolio-review"),
+    ("risk-report", "portfolio-review"),
+    ("thesis-check", "portfolio-review"),
+    ("pnl-review", "portfolio-review"),
+    ("position-review", "portfolio-review"),
+    ("portfolio-review", "daily-compliance"),
+    ("daily-compliance", "execution"),
+]
+
+
+def _management():
+    nodes, stages_out = [], []
+    for tier, sid, title in DAILY_STAGES:
+        members = DAILY_NODES[sid]
+        stages_out.append({"id": sid, "tier": tier, "title": title,
+                           "nodes": [m[0] for m in members]})
+        for key, name, tier_model, brief in members:
+            nodes.append({
+                "id": key, "stage": sid, "stage_title": title,
+                "name": name, "model_tier": tier_model,
+                "brief": brief.strip(),
+                "default_model": TIER_MODEL[tier_model],
+                "default_prompt": default_prompt(key),
+                "second_duty": SECONDARY_DUTIES.get(key),
+                "derived": False,
+            })
+    return {
+        "id": "management",
+        "title": "Management",
+        "subtitle": "Origination deliberates; management executes "
+                    "discipline. No debate - anything worth arguing "
+                    "escalates back to origination.",
+        "stages": stages_out,
+        "nodes": nodes,
+        "edges": [{"from": a, "to": b, "kind": "flow", "rounds": None}
+                  for a, b in DAILY_EDGES],
+    }
+
+
+def pipeline_spec():
+    """Every flow the engine runs, plus the models an owner may pick.
+
+    Two flows today. `execution` appears in both by design: it is one
+    seat that both flows hand an instruction to, so an override on it
+    applies wherever it runs — duplicating it under a second id would
+    promise a distinction the engine does not make.
+    """
+    return {
+        "flows": [_origination(), _management()],
         # The models an owner may pick from. A list, not a text box:
         # see alliela/overrides.py on why.
         "models": [{"id": m, "name": n, "note": note}

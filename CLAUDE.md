@@ -159,6 +159,21 @@ Distinct from the vendored framework's `agent_models` above: that is
 config for the whole process, this is **one fund's owner editing their
 own desks** from the portal. The two do not interact.
 
+`pipeline_spec()` returns **every flow the engine runs** —
+`{flows: [origination, management], models}` — so the portal draws them
+from the same source. Origination is derived from its stage constants;
+the management flow (`daily.py`) is authored in `DAILY_NODES` because
+its duties are not declared as a constant, but its **edges are read off
+what each duty is actually handed** — the Portfolio Review is given all
+four duty reports as well as the verdicts, so it has five inputs, not
+one. `execution` appears in both flows on purpose: it is one seat both
+flows hand an instruction to, so an override on it applies wherever it
+runs. Duplicating it under a second id would promise a distinction the
+engine does not make. **`post-mortem` is deliberately absent** — the
+marketing page carries a template for it, but no such agent exists in
+the engine, and a graph that claims to be derived from the code must
+not show one.
+
 `RunContext.agent_overrides` maps a **graph_spec node id** to
 `{model, prompt}`. It is applied in exactly one place —
 `ask_validated`, which every stage already funnels through — so a new
@@ -172,12 +187,15 @@ exact system prompt that agent runs on. An empty box invites an owner
 to replace a careful brief with one sentence and silently lose every
 rule the desk had.
 
-To make that possible, all 14 inline system prompts were **lifted to
-module-level functions** (`*_system_prompt`), following the convention
-`thesis.manager_system_prompt` already set for the Prompt Auditor. The
-lift was done by moving the expression source, never retyping it, and
-verified by evaluating the pre-refactor expressions and diffing:
-**all 14 byte-identical**. Keep prompts there — a prompt the engine can
+To make that possible, all 20 inline system prompts were **lifted to
+module-level functions** (`*_system_prompt`) — 14 in origination, 6 in
+the daily loop — following the convention `thesis.manager_system_prompt`
+already set for the Prompt Auditor. Both lifts were done by moving the
+expression source, never retyping it, and verified by evaluating the
+pre-refactor expressions and diffing: **all 20 byte-identical**. The
+daily loop's `honesty` local became the module constant `HONESTY` for
+the same reason — a prompt that only exists inside a function cannot be
+handed out. Keep prompts there — a prompt the engine can
 hand out is a prompt something else can read.
 
 What the owner may change:

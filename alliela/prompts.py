@@ -17,7 +17,7 @@ starts (alliela.overrides._fill). Storing an owner's prompt with the
 mandate baked in would freeze a copy of it — they would edit the
 mandate later and the agent would carry on reading the old one.
 """
-from alliela.stages import analysts, execution, ideagen, pm, risk
+from alliela.stages import analysts, daily, execution, ideagen, pm, risk
 from alliela.stages import selection, structuring, thesis
 
 # Placeholders, not values: see the module docstring.
@@ -69,7 +69,7 @@ BUILDERS = {
     # The Head has two duties — review the desks, then compile the
     # book. The compile is the one that produces the stage's output, so
     # it is the one an owner edits; the review pass keeps its own
-    # prompt (see overrides.OVERRIDE_PRIMARY_ONLY).
+    # prompt (see overrides.SECONDARY_DUTIES).
     "head-ideagen": lambda ctx: ideagen.head_compile_system_prompt(),
     "conviction": _sel_lens("conviction"),
     "feasibility": _sel_lens("feasibility"),
@@ -94,6 +94,16 @@ BUILDERS = {
     "pm-funding": pm.funding_system_prompt,
     "pm-instruction": lambda ctx: pm.instruction_system_prompt(),
     "execution": execution.execution_system_prompt,
+
+    # The management flow (daily.py). Its duties take no run-time
+    # values in the system prompt — the book, the snapshots and the
+    # as-of date are all in the user message — so these are constant.
+    "market-context": lambda ctx: daily.market_context_system_prompt(),
+    "risk-report": lambda ctx: daily.risk_report_system_prompt(),
+    "thesis-check": lambda ctx: daily.thesis_check_system_prompt(),
+    "pnl-review": lambda ctx: daily.pnl_review_system_prompt(),
+    "position-review": lambda ctx: daily.position_review_system_prompt(),
+    "portfolio-review": lambda ctx: daily.portfolio_review_system_prompt(),
 }
 
 
