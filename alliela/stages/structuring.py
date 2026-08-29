@@ -61,7 +61,7 @@ def run_structuring(ctx, llm, thesis, reports):
 
     docs = [("trader", "Transaction Proposal", "output",
              proposal.to_html("Transaction Proposal"),
-             {"agent": "Trading Desk", "stage": STAGE,
+             {"agent": "Trading Desk", "node": "structuring", "stage": STAGE,
               "structured": proposal.model_dump(),
               "verified_snapshot": snapshot})]
     for key, title, doc_type, html, meta in docs:

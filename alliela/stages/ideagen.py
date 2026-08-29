@@ -155,11 +155,12 @@ def run_ideagen(ctx, llm):
     for key, name, _ in DESKS:
         docs.append((key, titles[key], "output",
                      books[key].to_html(titles[key]),
-                     {"agent": name, "stage": STAGE,
+                     {"agent": name, "node": key, "stage": STAGE,
                       "structured": books[key].model_dump()}))
     docs.append(("head", "Combined Ideas Book", "output",
                  combined.to_html("Combined Ideas Book"),
-                 {"agent": "Head of Idea Generation", "stage": STAGE,
+                 {"agent": "Head of Idea Generation", "node": "head-ideagen",
+                  "stage": STAGE,
                   "structured": combined.model_dump()}))
     for key, title, doc_type, html, meta in docs:
         if ctx.sink:

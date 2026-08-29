@@ -138,7 +138,7 @@ def run_pm(ctx, llm, thesis, proposal, constraints):
 
     docs = [("portfolio", "Portfolio Decision", "output",
              decision.to_html("Portfolio Decision"),
-             {"agent": "PM - Decision", "stage": STAGE,
+             {"agent": "PM - Decision", "node": "pm-decision", "stage": STAGE,
               "structured": decision.model_dump()})]
 
     funding = None
@@ -159,7 +159,7 @@ def run_pm(ctx, llm, thesis, proposal, constraints):
             model=ctx.pm_model, calls=calls)
         docs.append(("funding", "Funding Plan", "output",
                      funding.to_html("Funding Plan"),
-                     {"agent": "PM - Funding", "stage": STAGE,
+                     {"agent": "PM - Funding", "node": "pm-funding", "stage": STAGE,
                       "structured": funding.model_dump()}))
 
         instr_system = instruction_system_prompt()
@@ -180,7 +180,8 @@ def run_pm(ctx, llm, thesis, proposal, constraints):
             model=ctx.pm_model, calls=calls)
         docs.append(("instruction", "Dealing Instruction", "output",
                      instruction.to_html("Dealing Instruction"),
-                     {"agent": "PM - Instruction", "stage": STAGE,
+                     {"agent": "PM - Instruction", "node": "pm-instruction",
+                      "stage": STAGE,
                       "structured": instruction.model_dump()}))
 
     for key, title, doc_type, html, meta in docs:

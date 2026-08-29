@@ -16,6 +16,7 @@ from alliela.stages.risk import run_risk
 from alliela.stages.selection import run_selection
 from alliela.stages.retrospective import run_retrospective as _run_retro
 from alliela.stages.structuring import run_structuring
+from alliela.structured import note_node
 from alliela.stages.thesis import run_thesis
 
 
@@ -103,12 +104,17 @@ def run_origination(ctx, llm):
 
     if instruction is not None:
         # Compliance gate — deterministic, no LLM, 0 calls
+        note_node(ctx, "compliance", "Compliance",
+                  "Compliance (rule engine)", "running")
         checks, compliance_passed = check_instruction(
             instruction, decision, constraints, ctx.book, funding,
             restrictions=ctx.restrictions)
         record = compliance_record_html(checks, compliance_passed)
+        note_node(ctx, "compliance", "Compliance",
+                  "Compliance (rule engine)", "done")
         doc = ("compliance-record", "Compliance Record", "output",
                record, {"agent": "Compliance (rule engine)",
+                        "node": "compliance",
                         "stage": "Compliance",
                         "structured": {"checks": checks,
                                        "passed": compliance_passed}})
@@ -289,12 +295,17 @@ def run_daily_loop(ctx, llm):
     report = None
     compliance_passed = None
     if note.rebalance:
+        note_node(ctx, "daily-compliance", "Compliance",
+                  "Compliance (rule engine)", "running")
         checks, compliance_passed = check_daily(
             note.rebalance, ctx.book or [],
             restrictions=ctx.restrictions)
         record = compliance_record_html(checks, compliance_passed)
+        note_node(ctx, "daily-compliance", "Compliance",
+                  "Compliance (rule engine)", "done")
         doc = ("compliance-record", "Compliance Record", "output",
                record, {"agent": "Compliance (rule engine)",
+                        "node": "daily-compliance",
                         "stage": "Compliance",
                         "structured": {"checks": checks,
                                        "passed": compliance_passed}})

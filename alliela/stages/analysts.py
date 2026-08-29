@@ -150,11 +150,11 @@ def run_analysts(ctx, llm, brief):
     for key, name, _ in ANALYSTS:
         docs.append((key, TITLES[key], "output",
                      reports[key].to_html(TITLES[key]),
-                     {"agent": name, "stage": STAGE,
+                     {"agent": name, "node": key, "stage": STAGE,
                       "structured": reports[key].model_dump()}))
     docs.append(("analyst-lead", "Analyst Revision Notes", "output",
                  notes.to_html("Analyst Revision Notes"),
-                 {"agent": "Analyst Lead", "stage": STAGE,
+                 {"agent": "Analyst Lead", "node": "analyst-lead", "stage": STAGE,
                   "structured": notes.model_dump()}))
     for key, title, doc_type, html, meta in docs:
         if ctx.sink:

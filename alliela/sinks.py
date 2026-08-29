@@ -6,6 +6,7 @@ package ships only a file sink so the open-source engine is complete
 on its own."""
 import json
 import pathlib
+import time
 
 
 class FileSink:
@@ -15,6 +16,8 @@ class FileSink:
         self.dir = pathlib.Path(root) / run_id
         self.dir.mkdir(parents=True, exist_ok=True)
         self._calls = (self.dir / "calls.jsonl").open("a",
+                                                      encoding="utf-8")
+        self._nodes = (self.dir / "nodes.jsonl").open("a",
                                                       encoding="utf-8")
 
     def on_call(self, cap):
@@ -29,6 +32,19 @@ class FileSink:
         self._calls.write(json.dumps(rec, ensure_ascii=False) + "\n")
         self._calls.flush()
 
+    def on_node(self, node, stage, agent, state):
+        """One line per lifecycle event, appended as it happens.
+
+        Flushed rather than buffered: the whole value of this stream is
+        being readable WHILE the run is still going, and a buffered
+        progress log is a log you can only read once you no longer
+        need it.
+        """
+        rec = {"node": node, "stage": stage, "agent": agent,
+               "state": state, "at": time.time()}
+        self._nodes.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        self._nodes.flush()
+
     def on_document(self, key, title, doc_type, html, meta):
         (self.dir / f"{key}.html").write_text(html, encoding="utf-8")
         (self.dir / f"{key}.meta.json").write_text(
@@ -40,3 +56,4 @@ class FileSink:
             json.dumps(rollup, ensure_ascii=False, indent=1),
             encoding="utf-8")
         self._calls.close()
+        self._nodes.close()

@@ -376,6 +376,37 @@ Upstream ships no NOTICE file of its own, so ours is the only one. Keep
 materially, and never remove either file — they must travel with every
 distribution, including the public mirror.
 
+## Node lifecycle — `sink.on_node` (Aug 2026)
+
+The portal lights up each agent on its graph while a run is going. That
+needs something the archive cannot supply: `run_calls` is written when a
+call **returns**, so an agent thinking for ninety seconds is invisible
+for exactly the ninety seconds a watcher cares about.
+
+So `ask_validated` emits `sink.on_node(node, stage, agent, state)` either
+side of the call — `"running"` before, `"done"` after. It lives there for
+the same reason the overrides hook does: **every stage funnels through
+that one function**, so one edit covers the pipeline instead of ten.
+
+- **Optional at every step.** No `node` id, no sink, or a sink predating
+  the protocol — all skipped, and an `on_node` that raises is caught and
+  logged. A run that finishes with a gap in its progress bar beats a
+  paid run that dies reporting one.
+- **Repair is not a second agent.** A malformed-JSON repair call stays
+  inside the same agent's turn: `done` fires once, after the repair
+  validates.
+- **The Compliance gate is rule code** and never reaches
+  `ask_validated`, so `pipeline.py` calls `note_node()` around it
+  directly — otherwise the one deterministic seat would be the one that
+  never lights up.
+- **Documents carry their node id** in meta (`{"agent": …, "node": …}`),
+  which is how the portal attaches "here is what this agent wrote" to
+  the right seat. The ids are `graph_spec` node ids; a typo there is a
+  document that silently never appears, so they are worth checking
+  against `pipeline_spec()` when adding a stage.
+- `FileSink` writes `nodes.jsonl`, flushed per event — a buffered
+  progress log is one you can only read once you no longer need it.
+
 ## Updating the vendored upstream
 
 This folder was added with:

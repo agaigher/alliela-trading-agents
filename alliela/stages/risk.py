@@ -118,7 +118,7 @@ def run_risk(ctx, llm, thesis, proposal):
     for key, lens_name, _ in LENSES:
         docs.append((key, TITLES[key], "output",
                      views[key].to_html(TITLES[key]),
-                     {"agent": lens_name, "stage": STAGE,
+                     {"agent": lens_name, "node": key, "stage": STAGE,
                       "structured": views[key].model_dump()}))
     docs.append(("risk-debate", "Risk Debate Transcript", "transcript",
                  transcript_html("Risk Panel — Debate Transcript",
@@ -126,7 +126,7 @@ def run_risk(ctx, llm, thesis, proposal):
                  {"agent": "Risk Panel", "stage": STAGE}))
     docs.append(("head-risk", "Risk Constraints", "output",
                  constraints.to_html("Risk Constraints"),
-                 {"agent": "Head of Risk", "stage": STAGE,
+                 {"agent": "Head of Risk", "node": "head-risk", "stage": STAGE,
                   "structured": constraints.model_dump()}))
     for key, title, doc_type, html, meta in docs:
         if ctx.sink:

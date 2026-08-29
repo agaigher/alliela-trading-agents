@@ -145,10 +145,10 @@ def run_thesis(ctx, llm, brief, reports):
     docs = [
         ("bull", "Bull Case", "output",
          debate_doc_html("Bull", bull_turns),
-         {"agent": "Bull", "stage": STAGE}),
+         {"agent": "Bull", "node": "bull", "stage": STAGE}),
         ("bear", "Bear Case", "output",
          debate_doc_html("Bear", bear_turns),
-         {"agent": "Bear", "stage": STAGE}),
+         {"agent": "Bear", "node": "bear", "stage": STAGE}),
         ("researcher-debate", "Investment Debate Transcript",
          "transcript",
          transcript_html("Investment Debate — Full Transcript", turns),
@@ -156,11 +156,12 @@ def run_thesis(ctx, llm, brief, reports):
           "rounds": ROUNDS}),
         ("research-manager", "Thesis", "output",
          thesis.to_html("Thesis"),
-         {"agent": "Research Manager", "stage": STAGE,
+         {"agent": "Research Manager", "node": "research-manager",
+          "stage": STAGE,
           "structured": thesis.model_dump()}),
         ("premortem", "Pre-mortem Review", "output",
          premortem.to_html("Pre-mortem Review"),
-         {"agent": "Pre-mortem", "stage": STAGE,
+         {"agent": "Pre-mortem", "node": "premortem", "stage": STAGE,
           "structured": premortem.model_dump()}),
     ]
     for key, title, doc_type, html, meta in docs:

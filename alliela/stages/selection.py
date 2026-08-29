@@ -135,11 +135,11 @@ def run_selection(ctx, llm, combined):
     for key, agent, lens, _ in LENSES:
         docs.append((key, titles[key], "output",
                      cards[key].to_html(titles[key]),
-                     {"agent": agent, "stage": STAGE,
+                     {"agent": agent, "node": key, "stage": STAGE,
                       "structured": cards[key].model_dump()}))
     docs.append(("chair", "Idea Brief", "output",
                  brief.to_html("Idea Brief"),
-                 {"agent": "Selection Chair", "stage": STAGE,
+                 {"agent": "Selection Chair", "node": "chair", "stage": STAGE,
                   "structured": brief.model_dump(),
                   "verified_snapshots": snapshots}))
     for key, title, doc_type, html, meta in docs:

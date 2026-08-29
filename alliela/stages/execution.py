@@ -51,7 +51,7 @@ def run_execution(ctx, llm, instruction):
 
     docs = [("execution", "Execution Report", "output",
              report.to_html("Execution Report"),
-             {"agent": "Execution", "stage": STAGE,
+             {"agent": "Execution", "node": "execution", "stage": STAGE,
               "structured": report.model_dump(),
               "snapshots": snapshots})]
     for key, title, doc_type, html, meta in docs:

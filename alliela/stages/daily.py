@@ -141,7 +141,8 @@ def run_daily(ctx, llm):
         MarketContextBrief, intel_calls, node="market-context")
     docs.append(("market-context", "Market Context Brief", "output",
                  mkt.to_html("Market Context Brief"),
-                 {"agent": "Market Context", "stage": STAGE_INTEL,
+                 {"agent": "Market Context", "node": "market-context",
+                  "stage": STAGE_INTEL,
                   "structured": mkt.model_dump()}))
 
     # 2 — Daily Risk Report (book-level)
@@ -154,7 +155,8 @@ def run_daily(ctx, llm):
         DailyRiskReport, intel_calls, node="risk-report")
     docs.append(("daily-risk", "Daily Risk Report", "output",
                  risk.to_html("Daily Risk Report"),
-                 {"agent": "Risk Report", "stage": STAGE_INTEL,
+                 {"agent": "Risk Report", "node": "risk-report",
+                  "stage": STAGE_INTEL,
                   "structured": risk.model_dump()}))
 
     # 3 — Thesis Check, once per live position
@@ -171,7 +173,8 @@ def run_daily(ctx, llm):
         checks.append(c)
     docs.append(("thesis-status", "Thesis Status Sheet", "output",
                  thesis_sheet_html("Thesis Status Sheet", checks),
-                 {"agent": "Thesis Check", "stage": STAGE_INTEL,
+                 {"agent": "Thesis Check", "node": "thesis-check",
+                  "stage": STAGE_INTEL,
                   "structured": [c.model_dump() for c in checks]}))
 
     # 4 — P&L Attribution (one pass, whole book)
@@ -184,7 +187,8 @@ def run_daily(ctx, llm):
         PnLAttribution, intel_calls, node="pnl-review")
     docs.append(("pnl-attribution", "P&L Attribution", "output",
                  pnl.to_html("P&L Attribution"),
-                 {"agent": "P&L Review", "stage": STAGE_INTEL,
+                 {"agent": "P&L Review", "node": "pnl-review",
+                  "stage": STAGE_INTEL,
                   "structured": pnl.model_dump()}))
 
     # 5 — Position Verdicts, once per live position
@@ -207,7 +211,8 @@ def run_daily(ctx, llm):
         verdicts.append(v)
     docs.append(("position-verdicts", "Position Verdicts", "output",
                  verdicts_html("Position Verdicts", verdicts),
-                 {"agent": "Position Review", "stage": STAGE_VERDICTS,
+                 {"agent": "Position Review", "node": "position-review",
+                  "stage": STAGE_VERDICTS,
                   "structured": [v.model_dump() for v in verdicts]}))
 
     # 6 — Portfolio Review (the loop's only deep-think call)
@@ -227,7 +232,8 @@ def run_daily(ctx, llm):
         reasoning={"max_tokens": 2048}, node="portfolio-review")
     docs.append(("portfolio-note", "Daily Portfolio Note", "output",
                  note.to_html("Daily Portfolio Note"),
-                 {"agent": "Portfolio Review", "stage": STAGE_REVIEW,
+                 {"agent": "Portfolio Review", "node": "portfolio-review",
+                  "stage": STAGE_REVIEW,
                   "structured": note.model_dump()}))
 
     for key, title, doc_type, html, meta in docs:

@@ -33,6 +33,14 @@ def ask_validated(ctx, llm, *, agent, stage, system, user, validate,
         if ctx.sink:
             ctx.sink.on_call(cap)
 
+    # Node lifecycle. Emitted here for the same reason the overrides
+    # hook lives here: every stage funnels through this function, so
+    # one edit covers the pipeline instead of ten. A call is archived
+    # only once it RETURNS, which makes "started" unknowable from the
+    # archive alone — and an agent that is thinking for ninety seconds
+    # is exactly the one a watcher wants to see.
+    _node(ctx, node, stage, agent, "running")
+
     cap = llm.call(model=model,
                    messages=[{"role": "system", "content": system},
                              {"role": "user", "content": user}],
@@ -40,7 +48,7 @@ def ask_validated(ctx, llm, *, agent, stage, system, user, validate,
                    reasoning=reasoning)
     _record(cap)
     try:
-        return validate(cap.json_text())
+        result = validate(cap.json_text())
     except Exception as exc:
         repair_system = (
             "You repair malformed JSON. Output ONLY the corrected, "
@@ -58,4 +66,42 @@ def ask_validated(ctx, llm, *, agent, stage, system, user, validate,
                         agent=f"{agent} (repair)", stage=stage,
                         seq=ctx.next_seq())
         _record(cap2)
-        return validate(cap2.json_text())
+        # Still inside the agent's turn: repair is this agent failing
+        # and recovering, not a new one starting. Marking it done only
+        # after the repair validates keeps the two honest.
+        result = validate(cap2.json_text())
+        _node(ctx, node, stage, agent, "done")
+        return result
+    _node(ctx, node, stage, agent, "done")
+    return result
+
+
+def note_node(ctx, node, stage, agent, state):
+    """The lifecycle emit, for stages that never reach ask_validated.
+
+    The Compliance gate is rule code with no model call, so without
+    this its node would be the one seat on the graph that never lights
+    up — and the deterministic gate is precisely the step a watcher
+    most wants confirmation of.
+    """
+    _node(ctx, node, stage, agent, state)
+
+
+def _node(ctx, node, stage, agent, state):
+    """Tell the sink an agent started or finished.
+
+    Optional throughout: `node` is None for the agents whose id the
+    graph does not carry, and a sink predating this protocol has no
+    `on_node`. Neither is worth failing a paid run over, so both are
+    skipped rather than raised — a run that completes with a gap in
+    its progress bar beats a run that dies reporting one.
+    """
+    if not node or not ctx.sink:
+        return
+    fn = getattr(ctx.sink, "on_node", None)
+    if fn is None:
+        return
+    try:
+        fn(node, stage, agent, state)
+    except Exception as exc:
+        print(f"sink.on_node({node}, {state}) failed: {exc}")
