@@ -267,6 +267,119 @@ a headless browser. Same context-pack-or-tool pattern as the existing
 market helpers in `alliela/market.py`; keys live in the deployment
 `.env`, never in this open-source unit.
 
+## Evidence and research volume (decided 2 Sep 2026)
+
+**The finding.** Every real thesis the desk has judged since Tier 04
+went live — SIE.DE ×2, ENR.DE, ETN, NXPI, across two funds and four
+mandates — ended `pass`, and none of them was a rejection. All five are
+deferrals ("conviction is withheld, not killed", "re-underwrite as long
+only if…"). The Bear won each time on the same ground: the load-bearing
+numbers (segment revenue, order-book, filing disclosures, transcript
+commentary) were flagged unverified in the fund's own reports. Three
+structural causes, none of them the bar:
+
+1. The data layer (`alliela/market.py`) is Yahoo chart + Yahoo
+   quoteSummary + Google News RSS **titles** — no article text, no
+   filings, no segments. The analyst rule "if the pack lacks it, put it
+   in `coverage_gaps`" then manufactures the gap the Bear cites.
+2. The desk rule "a claim without a citation is conceded" makes a
+   coverage gap unanswerable — the rebutting fact is what the pack
+   omits.
+3. The Bear speaks last (`stages/thesis.py`: Bull opens, Bear closes
+   turn 6, Manager judges). And the Manager prompt folds "deferred" into
+   `pass`, so "yes, after Q3 confirms X" ends the run like "bad idea".
+
+**The bar stays.** No change to the Manager's standard of evidence; a
+position is not bought for the sake of buying. What changes is the
+evidence supply, the volume of research per run, and the verdict
+vocabulary. Three phases, each its own flow version, in this order.
+
+### Phase A — bounded tool-calling for the Analyst team
+
+- **Who:** Tier 03 analysts only. The Thesis Desk, PM and everything
+  downstream keep reading a **frozen pack** — the debate adds no data.
+- **How:** OpenRouter tool-calling (`tools` in the request, tool
+  results fed back) inside `ask_validated`, so overrides and telemetry
+  inherit it. Cap **6 tool calls per analyst per pass**; a call over the
+  cap is refused with a message, not silently dropped.
+- **Logged, twice.** Every call + args + result lands on the
+  `CapturedCall` (new `tools` field → the already-provisioned
+  `run_calls.tools` column — the telemetry requirement below has
+  demanded this since day one). And each analyst's fetched evidence is
+  written as its own document (`{key}-evidence`) before Tier 04 starts:
+  that document is the frozen pack, and the Retrospective audits it.
+- **Tool failures are data.** A tool that cannot answer returns
+  `{"status": "unavailable", "why": …}`; the analyst records the gap.
+  Never a fabricated result, never a silent empty.
+- **Free tool set (keyless, this phase):**
+  - `sec_filings` — EDGAR submissions index for a ticker (forms, dates,
+    accession numbers).
+  - `sec_financials` — XBRL companyfacts: dated, as-reported values per
+    concept, segment dimensions where the filer tagged them.
+  - `sec_filing_section` — one item of a 10-K/10-Q/20-F (MD&A, segment
+    note, risk factors, guidance), trimmed to a token budget.
+  - `sec_fulltext_search` — EDGAR full-text search over filings, dated.
+  - `article_text` — resolve a Google News link and extract the body.
+  - `news_search` — the existing RSS search, wider limit, dated.
+  - `price_history` / `realized_vol` — Yahoo chart at longer ranges,
+    realized volatility over a named window (the Risk panel's missing
+    input).
+  - `options_iv` — Yahoo options chain, ATM implied vol; US-listed only.
+- **Honest coverage limit.** EDGAR covers US filers and foreign private
+  issuers (20-F/6-K). A German or Japanese primary listing gets article
+  text and price tools only; its segment gap stays a gap. That is the
+  case for paid providers (below) — not a reason to loosen the desk.
+- **Exit test:** one real run whose Thesis cites a filing-sourced
+  number no pack-only run could have produced, with the evidence
+  document showing the fetch.
+
+### Phase B — research volume
+
+- **Bull closes.** Three rounds, then a Bull closing rebuttal (turn 7).
+  The Manager prompt gains one rule: an unfilled coverage gap is a cost
+  to the thesis, not a verdict on its own — the verdict must weigh what
+  the evidence does show.
+- **News depth.** Idea Generation 8 → 20 headlines per query. Analyst
+  news queries 2 → 5 (name+ticker, name+catalyst, competitors/sector,
+  regulator/policy, guidance/outlook), top bodies via `article_text`.
+- **Two revision passes.** The Lead audits twice; the second pass is
+  where tool calls chase the first audit's gaps. +4 quick-model calls.
+- **Second candidate.** Selection promotes its top two; both run Tiers
+  03–04. If both come back non-pass, Structuring takes the higher
+  conviction and the other becomes a `defer` (Phase C). If one passes,
+  the other proceeds. Doubles the cost of Tiers 03–04.
+
+### Phase C — `defer` as a first-class verdict
+
+- `Thesis.direction ∈ {long, short, pass, defer}`. `pass` = the idea is
+  wrong. `defer` = right idea, evidence not yet in hand — and it must
+  carry ≥1 dated, decidable re-entry criterion.
+- A deferred thesis persists to a `watchlist` table (fund, ticker, run,
+  criteria, review-by). The daily loop checks whether a criterion has
+  fired; an origination may pick a fired name up as its tip. A `defer`
+  never opens a position — it arms one.
+- **Portal:** the fund page shows the watchlist beside the book.
+
+### Paid data — roadmap, not now
+
+Paid providers (segment financials, transcripts, European/Japanese
+coverage — FMP/EODHD class) are a future portal option **charged
+separately**: an owner chooses free tools or paid tools per fund, and
+paid fetches settle through the same credit ledger as model calls. This
+also reverses the P3 "no tool picker" refusal — once agents call tools,
+a picker stores something the engine reads. Keys stay in the
+deployment `.env`, never in this open-source unit.
+
+### Economics
+
+Today: ≈ $1.00, 29 calls, ~15 min, 18 documents per origination.
+Projected after A+B: **$2.5–3.5, 25–35 min** — tool calls are free HTTP
+but lengthen prompts; the second candidate doubles the deep tiers.
+`credits.estimate_micros` learns from history, so the first runs on a
+new flow version **under-hold** by design; settlement bills the actual.
+Make the estimate flow-version-aware (average over the current version,
+fall back to all) before Phase B ships to owners.
+
 ## Run telemetry & output archive (requirement)
 
 Binding requirement for the runtime (lands with the `api/` queue worker;
