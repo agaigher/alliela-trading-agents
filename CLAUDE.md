@@ -358,7 +358,15 @@ vocabulary. Three phases, each its own flow version, in this order.
   criteria, review-by). The daily loop checks whether a criterion has
   fired; an origination may pick a fired name up as its tip. A `defer`
   never opens a position — it arms one.
-- **Portal:** the fund page shows the watchlist beside the book.
+- **Shadow-tracked against the benchmark.** Every `defer` *and* every
+  `pass` is marked daily from the verdict date at the price then, in the
+  thesis's direction, against the fund's benchmark — a paper record of
+  the positions not taken. Never counted in NAV. The Retrospective reads
+  it: a watchlist that keeps beating the benchmark says the desk is too
+  slow; passes that would have lost say it was right to refuse. The
+  desk's misses and its correct refusals both become measurable.
+- **Portal:** the fund page shows the watchlist beside the book, each
+  entry with its shadow return vs benchmark since the verdict.
 
 ### Paid data — roadmap, not now
 
