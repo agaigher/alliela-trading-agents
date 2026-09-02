@@ -4,6 +4,7 @@ output-format reference. Tier 01 documents for now; each tier adds its
 own as it lands. Every document renders to the site's .doc HTML style
 via to_html()."""
 import html as _html
+import json
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -1001,6 +1002,41 @@ def transcript_html(title, interleaved):
                                for p in text.split("\n\n")
                                if p.strip()))
     return _doc("".join(parts))
+
+
+def evidence_html(title, entries, budget):
+    """An analyst's tool trail: every call this run, its arguments,
+    and the result's status — with the payload folded away. This is
+    the audit document: it shows where a report's numbers came from,
+    so the Thesis Desk can weigh a citation and the Retrospective can
+    check it. Refused calls are listed too; a budget that was hit is a
+    finding about the analyst, not a thing to hide."""
+    if not entries:
+        body = ("<p>No tool calls this run — the report was written "
+                "from the context pack alone.</p>")
+    else:
+        rows = []
+        for i, en in enumerate(entries, 1):
+            res = en.get("result")
+            status = (res.get("status", "ok") if isinstance(res, dict)
+                      else "ok")
+            args = ", ".join(
+                f"{k}={_e(json.dumps(v, ensure_ascii=False, default=str))}"
+                for k, v in (en.get("args") or {}).items())
+            payload = _e(json.dumps(res, ensure_ascii=False, indent=1,
+                                    default=str))
+            rows.append(
+                f"<details><summary><strong>{i}. {_e(en.get('tool'))}"
+                f"</strong>({args}) — <em>{_e(status)}</em>"
+                f" · {en.get('ms', 0)} ms</summary>"
+                f"<pre>{payload}</pre></details>")
+        used = sum(1 for en in entries
+                   if not (isinstance(en.get("result"), dict)
+                           and en["result"].get("status") == "refused"))
+        body = (f"<p><strong>{used} of {budget} tool calls used</strong>"
+                f" across both passes; {len(entries) - used} refused."
+                f"</p>" + "".join(rows))
+    return _doc(f"<h3>{_e(title)}</h3>{body}")
 
 
 def _e(s):

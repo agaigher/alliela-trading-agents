@@ -3,13 +3,16 @@ model emits malformed or schema-violating JSON — exactly one repair
 call (quick model) before giving up. The repair call is archived like
 any other call; a stage's call count grows honestly when repair fires."""
 import json
+import time
 
+from alliela import tools as _tools
 from alliela.overrides import resolve_model, resolve_system
 
 
 def ask_validated(ctx, llm, *, agent, stage, system, user, validate,
                   schema_json, model=None, reasoning=None, calls=None,
-                  node=None, override_prompt=True):
+                  node=None, override_prompt=True, tools=None,
+                  tool_budget=_tools.TOOL_BUDGET, evidence=None):
     """validate: parsed-JSON -> result (raise on invalid).
     Returns the validated result; captured calls are appended to
     `calls` and streamed to ctx.sink.
@@ -20,7 +23,14 @@ def ask_validated(ctx, llm, *, agent, stage, system, user, validate,
     override_prompt=False: this is the agent's SECOND duty and runs on
     a different prompt from the one the owner edits, so take their
     model but not their instructions (alliela.overrides
-    SECONDARY_DUTIES)."""
+    SECONDARY_DUTIES).
+
+    tools: names from alliela.tools the agent may call this pass, up
+    to tool_budget calls. Each round trip is a captured call in its
+    own right (the stage's call count grows honestly, as with repair);
+    every executed tool lands on the call that asked for it (cap.tools)
+    and, when `evidence` is a list, on that too — the caller writes it
+    out as the agent's evidence document."""
     # The owner's overrides land here, at the single point every
     # stage passes through, so no stage has to know they exist.
     if override_prompt:
@@ -41,12 +51,57 @@ def ask_validated(ctx, llm, *, agent, stage, system, user, validate,
     # is exactly the one a watcher wants to see.
     _node(ctx, node, stage, agent, "running")
 
-    cap = llm.call(model=model,
-                   messages=[{"role": "system", "content": system},
-                             {"role": "user", "content": user}],
-                   agent=agent, stage=stage, seq=ctx.next_seq(),
-                   reasoning=reasoning)
-    _record(cap)
+    messages = [{"role": "system", "content": system},
+                {"role": "user", "content": user}]
+    specs = _tools.specs_for(tools) if tools else None
+    used = 0
+    # Rounds are bounded twice: by the budget the model is told about,
+    # and by a hard ceiling in case it keeps asking after refusals.
+    for rnd in range(tool_budget + 3):
+        force_answer = bool(specs) and rnd >= tool_budget + 2
+        cap = llm.call(model=model, messages=messages, agent=agent,
+                       stage=stage, seq=ctx.next_seq(),
+                       reasoning=reasoning, tools=specs,
+                       tool_choice="none" if force_answer else None)
+        if not cap.tool_calls:
+            _record(cap)
+            break
+        messages.append(cap.assistant_message())
+        for tc in cap.tool_calls:
+            fn = (tc.get("function") or {})
+            name = fn.get("name", "")
+            try:
+                args = json.loads(fn.get("arguments") or "{}")
+            except json.JSONDecodeError:
+                args = {"_raw": fn.get("arguments")}
+            if name not in (tools or []):
+                result, ms = ({"status": "refused",
+                               "why": f"{name} is not one of your "
+                                      f"tools: {tools}"}, 0)
+            elif used >= tool_budget:
+                result, ms = ({"status": "refused",
+                               "why": f"tool budget of {tool_budget} "
+                                      "calls for this pass is spent — "
+                                      "write the report with what you "
+                                      "have and list the rest under "
+                                      "coverage_gaps"}, 0)
+            else:
+                used += 1
+                result, ms = _tools.execute(name, args)
+            entry = {"seq": cap.seq, "tool": name, "args": args,
+                     "result": result, "ms": ms,
+                     "at": time.strftime("%Y-%m-%dT%H:%M:%SZ",
+                                         time.gmtime())}
+            cap.tools.append(entry)
+            if evidence is not None:
+                evidence.append(entry)
+            messages.append({"role": "tool",
+                             "tool_call_id": tc.get("id", ""),
+                             "content": json.dumps(result,
+                                                   ensure_ascii=False,
+                                                   default=str)})
+        # Recorded after its tools ran, so the archive row carries them.
+        _record(cap)
     try:
         result = validate(cap.json_text())
     except Exception as exc:

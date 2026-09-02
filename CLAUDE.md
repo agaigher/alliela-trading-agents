@@ -333,6 +333,53 @@ vocabulary. Three phases, each its own flow version, in this order.
   number no pack-only run could have produced, with the evidence
   document showing the fetch.
 
+**Built 2 Sep 2026, local dry run passed; the real run is still to
+go.** What shipped, and where the spec above bent to reality:
+
+- `alliela/tools.py` — the registry (spec + impl + per-lens
+  `TOOLSETS`), `execute()` that turns every failure into a status. The
+  loop lives in `ask_validated` (`structured.py`): each round trip is
+  its own captured call, recorded *after* its tools ran so the archive
+  row carries them; the seventh call in a pass is refused with a
+  message that tells the analyst to write with what it has. `llm.py`
+  sends `tools`, captures `tool_calls`, and `CapturedCall.tools` holds
+  the executed trail → `run_calls.tools` (the worker now writes the
+  column 002 provisioned) and `FileSink`.
+- **No EDGAR full-text search.** `efts.sec.gov` answers 403 to every
+  non-browser client whatever the headers. Dropped rather than shipped
+  broken — a tool that always fails teaches the analyst to stop
+  calling tools. Eight tools, not nine.
+- **News links come from Yahoo Finance's search**, which returns the
+  publisher URL; GDELT is best-effort with a per-run circuit breaker
+  (it times out from this network); Google News RSS stays for title
+  breadth. Yahoo article pages answer a **consent wall** from the UK,
+  which `article_text` reports as `blocked` — it used to return the
+  cookie policy as `ok`, which is worse than nothing.
+- `sec_financials` follows **concept aliases** (`Revenues` →
+  `RevenueFromContractWithCustomerExcludingAssessedTax` under ASC 606)
+  and flags a concept as `stale` when its newest value is over ~18
+  months old, with the filer's nearest live tags. Consolidated facts
+  only; segment splits come from `sec_filing_section("segment")`,
+  which strips the inline-XBRL `<ix:header>` (otherwise the first
+  "backlog" hit is a member name) and falls back to approximate
+  multi-word matching, labelled as such.
+- **`CapturedCall.json_text` tolerates prose around the JSON.** A
+  model that has just used tools narrates before the document; on the
+  dry run that cost a repair call per report (8 of 35 calls). Now the
+  fenced block or outermost object is taken first.
+- **Dry-run economics** (`scripts/dry_run_analysts.py`, ETN, quick
+  model): 35 calls, 40 tool calls, $0.43, ~4 min for Tier 03 alone —
+  against 9 calls before. The Fundamentals Analyst cited the Q2 2026
+  10-Q segment note ($8.007B Electrical Americas backlog) and the debt
+  step-up ($9.895B → $21.33B) — numbers no pack-only run has ever had.
+  Coverage gaps stayed honest where the free tools end: borrow cost,
+  transcripts, segment operating margin Eaton does not tag.
+- `scripts/test_tool_loop.py` — the loop against a scripted fake
+  model, no network: execution, refusal, budget, evidence, JSON.
+- **Deploy** needs a worker rebuild on the mini (no migration — the
+  column exists). The Retrospective's Prompt Auditor sees the tool
+  rules because they live in `analyst_system_prompt`, module-level.
+
 ### Phase B — research volume
 
 - **Bull closes.** Three rounds, then a Bull closing rebuttal (turn 7).

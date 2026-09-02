@@ -8,6 +8,7 @@ exactly those fields away. One class, one method, everything captured.
 """
 import json
 import os
+import re
 import time
 from dataclasses import dataclass, field
 
@@ -34,14 +35,45 @@ class CapturedCall:
     latency_ms: int = 0
     failures: list = field(default_factory=list)   # retry chain
     raw: dict = field(default_factory=dict)        # untouched response
+    # Tool use, both halves: what the model asked for (verbatim from
+    # the message) and what was executed for it — name, args, result,
+    # latency — filled in by the caller that ran the tools. The
+    # telemetry contract has demanded "tool calls with their full
+    # arguments and tool results" since before any agent could call one.
+    tool_calls: list = field(default_factory=list)
+    tools: list = field(default_factory=list)
+
+    def assistant_message(self):
+        """The assistant turn to append to a conversation before the
+        tool results — content plus the tool_calls, exactly as sent."""
+        msg = {"role": "assistant", "content": self.text or None}
+        if self.tool_calls:
+            msg["tool_calls"] = self.tool_calls
+        return msg
 
     def json_text(self):
-        """Parse the completion as JSON, tolerating code fences."""
+        """Parse the completion as JSON, tolerating code fences and
+        prose around them. A model that has just used tools tends to
+        narrate ("Based on the data gathered…") before the document;
+        that narration used to cost a repair call per report."""
         s = self.text.strip()
         if s.startswith("```"):
             s = s.split("\n", 1)[1] if "\n" in s else s
             s = s.rsplit("```", 1)[0]
-        return json.loads(s)
+        try:
+            return json.loads(s)
+        except json.JSONDecodeError:
+            pass
+        fence = re.search(r"```(?:json)?\s*\n(.*?)\n\s*```", s, re.S)
+        if fence:
+            try:
+                return json.loads(fence.group(1))
+            except json.JSONDecodeError:
+                pass
+        a, b = s.find("{"), s.rfind("}")
+        if a != -1 and b > a:
+            return json.loads(s[a:b + 1])
+        return json.loads(s)          # raise with the original message
 
 
 class OpenRouter:
@@ -51,10 +83,15 @@ class OpenRouter:
 
     def call(self, *, model, messages, agent, stage, seq,
              temperature=0.4, max_tokens=8192, retries=3,
-             reasoning=None):
+             reasoning=None, tools=None, tool_choice=None):
         """reasoning: OpenRouter unified reasoning config, e.g.
         {"max_tokens": 2048} — enables extended thinking on models
-        that support it; the blocks land in CapturedCall.reasoning."""
+        that support it; the blocks land in CapturedCall.reasoning.
+
+        tools: OpenAI-style function specs. The model may answer with
+        tool_calls instead of (or as well as) content; they land on
+        CapturedCall.tool_calls and the caller runs the loop — this
+        client never executes anything."""
         cap = CapturedCall(agent=agent, stage=stage, seq=seq, model=model)
         grew = False           # one automatic retry at 2× on truncation
         body = {
@@ -66,6 +103,10 @@ class OpenRouter:
         }
         if reasoning:
             body["reasoning"] = reasoning
+        if tools:
+            body["tools"] = tools
+            if tool_choice:
+                body["tool_choice"] = tool_choice
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "HTTP-Referer": "https://alliela.com",
@@ -104,6 +145,7 @@ class OpenRouter:
                 cap.raw = data
                 msg = choice.get("message") or {}
                 cap.text = msg.get("content") or ""
+                cap.tool_calls = list(msg.get("tool_calls") or [])
                 # every reasoning shape OpenRouter exposes, verbatim
                 for k in ("reasoning", "reasoning_details",
                           "reasoning_content"):

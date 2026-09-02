@@ -28,7 +28,8 @@ class FileSink:
                "finish_reason": cap.finish_reason, "usage": cap.usage,
                "cost_usd": cap.cost_usd, "latency_ms": cap.latency_ms,
                "text": cap.text, "reasoning": cap.reasoning,
-               "failures": cap.failures, "raw": cap.raw}
+               "failures": cap.failures, "raw": cap.raw,
+               "tool_calls": cap.tool_calls, "tools": cap.tools}
         self._calls.write(json.dumps(rec, ensure_ascii=False) + "\n")
         self._calls.flush()
 
