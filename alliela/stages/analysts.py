@@ -184,11 +184,16 @@ def run_analysts(ctx, llm, brief):
     # nothing" is a finding the Retrospective should see.
     for key, name, _ in ANALYSTS:
         trail = evidence[key]
+        # doc_type stays 'output': run_documents CHECKs it against
+        # ('output', 'transcript') and RUN-0154 died on 'evidence' after
+        # the whole Analyst tier had run. The kind lives in meta instead
+        # — a schema change is not something a stage gets to demand.
         docs.append((f"{key}-evidence", f"{TITLES[key]} — Evidence",
-                     "evidence",
+                     "output",
                      evidence_html(f"{TITLES[key]} — Evidence", trail,
                                    TOOL_BUDGET * 2),
                      {"agent": name, "node": key, "stage": STAGE,
+                      "kind": "evidence",
                       "structured": {"calls": len(trail),
                                      "tools": sorted({e["tool"]
                                                       for e in trail}),

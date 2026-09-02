@@ -376,9 +376,16 @@ go.** What shipped, and where the spec above bent to reality:
   transcripts, segment operating margin Eaton does not tag.
 - `scripts/test_tool_loop.py` — the loop against a scripted fake
   model, no network: execution, refusal, budget, evidence, JSON.
-- **Deploy** needs a worker rebuild on the mini (no migration — the
-  column exists). The Retrospective's Prompt Auditor sees the tool
-  rules because they live in `analyst_system_prompt`, module-level.
+- **Deployed 2 Sep 2026** — worker rebuilt on the mini at `a0d886f`
+  (no migration; the column existed), public mirror synced. Registered
+  as **flow v6** ("Evidence package") with v5's `pipeline_spec` copied
+  across: the graph's topology did not change — tools are not nodes —
+  and a version without a spec row would leave the portal drawing a
+  plain strip. Exit test: RUN-0154, a free scan on Global Equities
+  Tactical Fund, enqueued by SQL insert (no credit hold; `settle`
+  debits the metered cost at the end regardless). The Retrospective's
+  Prompt Auditor sees the tool rules because they live in
+  `analyst_system_prompt`, module-level.
 
 ### Phase B — research volume
 
