@@ -386,6 +386,26 @@ go.** What shipped, and where the spec above bent to reality:
   debits the metered cost at the end regardless). The Retrospective's
   Prompt Auditor sees the tool rules because they live in
   `analyst_system_prompt`, module-level.
+- **Exit test, 3 Sep 2026 — plumbing proven, filing criterion not
+  exercised.** RUN-0154 died writing its first evidence document
+  (`doc_type` is CHECKed to `output|transcript`; the kind now lives in
+  `meta`) and exposed that the worker had never been able to settle
+  (see `api/CLAUDE.md`). RUN-0155, on the fixed worker: **$1.10, 44
+  calls, 42 tool calls, 14m 26s, 22 documents, settled $2.19** — the
+  cost barely moved from the pre-tools ~$1.00 because round trips run
+  on the quick model. Selection picked **EOAN.DE**, so every EDGAR
+  tool answered `unavailable` (honestly) and the desk judged on news,
+  article text, price history and realized vol: the Thesis cites the
+  comparator returns the Market Analyst pulled (+20.5% vs SIE.DE
+  +11.5%, NG.L +0.7%) and the 90-day news record — numbers no
+  pack-only run had. The verdict was a PASS **on the merits** (crowded,
+  no timing edge, −€2.66B FCF at 153% D/E), not on a data vacuum.
+  The filing-citation half of the exit test waits for Selection to
+  pick a US filer; the dry run on ETN already showed it working.
+  Two things RUN-0155 taught: the Fundamentals Analyst spent 7 of 8
+  calls learning a German name is not on EDGAR one spelling at a time
+  (the tool now says so on the first miss, and the prompt says it up
+  front); and `article_text` accepted a bare domain (rejected now).
 
 ### Phase B — research volume
 

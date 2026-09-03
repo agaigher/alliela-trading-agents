@@ -96,8 +96,19 @@ def _cik(ticker):
     t = ticker.upper().replace("-", ".")
     hit = table.get(t) or table.get(t.replace(".", "-"))
     if not hit:
-        return None, None, (f"{ticker} is not in EDGAR's ticker table — "
-                            "not a US filer or foreign private issuer")
+        # An exchange suffix (SIE.DE, 6501.T, NG.L) means a non-US
+        # primary listing; the bare root will not be there either, and
+        # on RUN-0155 the Fundamentals Analyst spent seven of eight
+        # calls finding that out one spelling at a time.
+        suffix = t.rsplit(".", 1)[-1] if "." in t else ""
+        why = (f"{ticker} is not in EDGAR's ticker table — not a US "
+               "filer or foreign private issuer. ")
+        if suffix and len(suffix) <= 3 and suffix not in ("A", "B"):
+            why += ("A non-US primary listing does not file with the "
+                    "SEC: every EDGAR tool will answer the same for any "
+                    "spelling of this name. Record the gap once; use "
+                    "news_search / article_text for its own reports.")
+        return None, None, why
     return hit[0], hit[1], None
 
 
@@ -477,6 +488,10 @@ def article_text(url, max_chars=5000):
                 "why": "Google News redirect links resolve only in a "
                        "browser — use the publisher URL from "
                        "news_search's 'articles'"}
+    if re.fullmatch(r"https?://[^/]+/?", url.strip()):
+        return {"status": "unavailable", "url": url,
+                "why": "that is a site's front page, not an article — "
+                       "pass the full article URL from news_search"}
     if "sec.gov/cgi-bin/viewer" in url or "sec.gov/ix?doc=" in url:
         return {"status": "unavailable", "url": url,
                 "why": "EDGAR's viewer is a JavaScript shell — fetch "
