@@ -25,7 +25,20 @@ from alliela.market import context_pack, price_pack
 from alliela.stages.thesis import ROUNDS, manager_system_prompt
 from alliela.structured import ask_validated
 
-STAGE = "Retrospective"
+STAGE = "Retrospective"           # the run's name; tiers below
+# One STAGE string per tier, matching graph_spec's stage titles exactly.
+# The portal lays a run's documents out by stage title, so a single
+# "Retrospective" would put all seven in one column the graph never draws.
+STAGE_SCORE = "Scorekeeping"
+STAGE_ATTRIBUTION = "Attribution"
+STAGE_AUDIT = "Process Audit"
+STAGE_REVIEW = "Performance Review"
+RETRO_STAGES = [
+    ("01", "retro-score", STAGE_SCORE),
+    ("02", "retro-attribution", STAGE_ATTRIBUTION),
+    ("03", "retro-audit", STAGE_AUDIT),
+    ("04", "retro-review", STAGE_REVIEW),
+]
 
 AUDITORS = [
     ("prompt-audit", "Prompt Auditor",
@@ -82,13 +95,24 @@ def run_retrospective(ctx, llm):
     news = context_pack([f"{j['name']} stock" for j in judged],
                         per_query=6)
 
-    def ask(agent, system, user, schema_cls, model=None,
+    def ask(agent, system, user, schema_cls, *, stage, node, model=None,
             reasoning=None):
+        # node= makes the lifecycle events fire and the owner's
+        # overrides apply; this was the last ask_validated site without
+        # one, which is why a retrospective could not be watched.
         return ask_validated(
-            ctx, llm, agent=agent, stage=STAGE, system=system,
+            ctx, llm, agent=agent, stage=stage, system=system,
             user=user, validate=schema_cls.model_validate,
             schema_json=json.dumps(schema_cls.model_json_schema()),
-            model=model, reasoning=reasoning, calls=calls)
+            model=model, reasoning=reasoning, calls=calls, node=node)
+
+    def emit(doc):
+        # As each document is written, not batched at the end: a
+        # watched run used to show nothing for minutes and then all seven
+        # at once, which is the opposite of watching it.
+        docs.append(doc)
+        if ctx.sink:
+            ctx.sink.on_document(*doc)
 
     base = (
         f"As-of date: {ctx.trade_date}.\n\n"
@@ -97,6 +121,13 @@ def run_retrospective(ctx, llm):
         f"criteria):\n{json.dumps(theses, indent=1, default=str)}\n\n"
         f"The book:\n"
         f"{json.dumps(ctx.book, indent=1, default=str)}")
+    if (ctx.tip or "").strip():
+        # A focus for the review, never its conclusion: a review handed
+        # its verdict in advance is not a review.
+        base += (f"\n\nThe fund owner asked this review to look "
+                 f"especially at: {ctx.tip.strip()}\nTreat that as "
+                 f"where to look, not as what to find - if the evidence "
+                 f"says the concern is unfounded, say so.")
 
     # 1 — Scorekeeper
     scoreboard = ask(
@@ -111,11 +142,12 @@ def run_retrospective(ctx, llm):
         "just list them. Decide the forensics scope: what deserves "
         "full attribution this week. Return STRICT JSON matching:\n"
         + json.dumps(WeeklyScoreboard.model_json_schema(), indent=1),
-        base, WeeklyScoreboard)
-    docs.append(("scoreboard", "Weekly Scoreboard", "output",
-                 scoreboard.to_html("Weekly Scoreboard"),
-                 {"agent": "Scorekeeper", "stage": STAGE,
-                  "structured": scoreboard.model_dump()}))
+        base, WeeklyScoreboard, stage=STAGE_SCORE, node="scorekeeper")
+    emit(("scoreboard", "Weekly Scoreboard", "output",
+          scoreboard.to_html("Weekly Scoreboard"),
+          {"agent": "Scorekeeper", "node": "scorekeeper",
+           "stage": STAGE_SCORE,
+           "structured": scoreboard.model_dump()}))
 
     # 2 — Attribution (the internet-enabled duty: real external record)
     attribution = ask(
@@ -136,11 +168,12 @@ def run_retrospective(ctx, llm):
         f"Post-decision market reality (real, fetched now):\n"
         f"{json.dumps(reality, indent=1)}\n\nRecent headlines:\n"
         f"{news}",
-        AttributionReport)
-    docs.append(("attribution", "Attribution Report", "output",
-                 attribution.to_html("Attribution Report"),
-                 {"agent": "Win/Failure Analysis", "stage": STAGE,
-                  "structured": attribution.model_dump()}))
+        AttributionReport, stage=STAGE_ATTRIBUTION, node="attribution")
+    emit(("attribution", "Attribution Report", "output",
+          attribution.to_html("Attribution Report"),
+          {"agent": "Win/Failure Analysis", "node": "attribution",
+           "stage": STAGE_ATTRIBUTION,
+           "structured": attribution.model_dump()}))
 
     # 3-5 — the Process Audit panel
     audit_context = (
@@ -163,11 +196,12 @@ def run_retrospective(ctx, llm):
             "without evidence are discarded upstream. Return STRICT "
             "JSON matching:\n"
             + json.dumps(AuditFinding.model_json_schema(), indent=1),
-            base + "\n\n" + audit_context, AuditFinding)
-        docs.append((key, TITLES[key], "output",
-                     findings[key].to_html(TITLES[key]),
-                     {"agent": agent, "stage": STAGE,
-                      "structured": findings[key].model_dump()}))
+            base + "\n\n" + audit_context, AuditFinding,
+            stage=STAGE_AUDIT, node=key)
+        emit((key, TITLES[key], "output",
+              findings[key].to_html(TITLES[key]),
+              {"agent": agent, "node": key, "stage": STAGE_AUDIT,
+               "structured": findings[key].model_dump()}))
 
     # 6 — Head of Performance Review (the flow's only deep-think call)
     head = ask(
@@ -191,22 +225,16 @@ def run_retrospective(ctx, llm):
         + "\n\nAudit findings:\n" + "\n\n".join(
             f"## {TITLES[k]}\n{findings[k].model_dump_json(indent=1)}"
             for k, _, _ in AUDITORS),
-        HeadReviewOutput, model=ctx.deep_model,
-        reasoning={"max_tokens": 2048})
-    docs.append(("performance-assessment", "Performance Assessment",
-                 "output",
-                 head.assessment.to_html("Performance Assessment"),
-                 {"agent": "Head of Performance Review",
-                  "stage": STAGE,
-                  "structured": head.assessment.model_dump()}))
-    docs.append(("improvement-backlog", "Improvement Backlog",
-                 "output",
-                 head.backlog.to_html("Improvement Backlog"),
-                 {"agent": "Head of Performance Review",
-                  "stage": STAGE,
-                  "structured": head.backlog.model_dump()}))
-
-    for key, title, doc_type, html, meta in docs:
-        if ctx.sink:
-            ctx.sink.on_document(key, title, doc_type, html, meta)
+        HeadReviewOutput, stage=STAGE_REVIEW, node="head-review",
+        model=ctx.deep_model, reasoning={"max_tokens": 2048})
+    emit(("performance-assessment", "Performance Assessment", "output",
+          head.assessment.to_html("Performance Assessment"),
+          {"agent": "Head of Performance Review", "node": "head-review",
+           "stage": STAGE_REVIEW,
+           "structured": head.assessment.model_dump()}))
+    emit(("improvement-backlog", "Improvement Backlog", "output",
+          head.backlog.to_html("Improvement Backlog"),
+          {"agent": "Head of Performance Review", "node": "head-review",
+           "stage": STAGE_REVIEW,
+           "structured": head.backlog.model_dump()}))
     return docs, calls, head

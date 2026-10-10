@@ -17,6 +17,7 @@ from alliela.overrides import MODEL_CHOICES, SECONDARY_DUTIES
 from alliela.prompts import default_prompt
 from alliela.stages.analysts import ANALYSTS
 from alliela.stages.ideagen import DESKS
+from alliela.stages.retrospective import AUDITORS, RETRO_STAGES
 from alliela.stages.risk import LENSES as RISK_LENSES
 from alliela.stages.selection import LENSES as SELECTION_LENSES
 
@@ -310,16 +311,94 @@ def _management():
     }
 
 
+# ── The Retrospective (alliela/stages/retrospective.py) ─────────────
+#
+# The weekly meta-loop: it judges the PROCESS, not the P&L, has no
+# trading authority, and ends in a ranked Improvement Backlog that the
+# Developer Agent implements as the next flow version. Drawn so it can
+# be watched and edited like the other two — it was the only flow the
+# portal could not show.
+#
+# The stage tuples come from retrospective.py itself (RETRO_STAGES), and
+# the three auditors are derived from its AUDITORS constant, so adding a
+# lens there adds a seat here.
+RETRO_NODES = {
+    "retro-score": [
+        ("scorekeeper", "Scorekeeper", QUICK,
+         "scores the period against reality - Worked / Failed / "
+         "Inconclusive relative to each THESIS'S expectation, never raw "
+         "P&L - and decides what deserves full attribution"),
+    ],
+    "retro-attribution": [
+        ("attribution", "Attribution", QUICK,
+         "judges decisions against what happened next, from real price "
+         "and news packs fetched now: unknowable at the time vs "
+         "knowable but missed; a right call for the wrong reason is "
+         "flagged, not celebrated"),
+    ],
+    "retro-audit": [(k, name, QUICK, lens[:160])
+                    for k, name, lens in AUDITORS],
+    "retro-review": [
+        ("head-review", "Head of Performance Review", DEEP,
+         "the flow's only deep-think seat: weighs the three audits, "
+         "discards unevidenced findings, writes the Performance "
+         "Assessment and the ranked Improvement Backlog. Changes the "
+         "process, never the book"),
+    ],
+}
+
+# What each seat is actually handed in retrospective.py.
+RETRO_EDGES = (
+    [("scorekeeper", "attribution")]
+    + [("attribution", k) for k, _, _ in AUDITORS]
+    + [(k, "head-review") for k, _, _ in AUDITORS]
+    # The Head is given the scoreboard and the attribution as well as
+    # the audits, so lines from the audits alone would understate it.
+    + [("scorekeeper", "head-review"), ("attribution", "head-review")]
+)
+
+
+def _retrospective():
+    nodes, stages_out = [], []
+    for tier, sid, title in RETRO_STAGES:
+        members = RETRO_NODES[sid]
+        stages_out.append({"id": sid, "tier": tier, "title": title,
+                           "nodes": [m[0] for m in members]})
+        for key, name, tier_model, brief in members:
+            nodes.append({
+                "id": key, "stage": sid, "stage_title": title,
+                "name": name, "model_tier": tier_model,
+                "brief": brief.strip(),
+                "default_model": TIER_MODEL[tier_model],
+                # None until these prompts are lifted into
+                # prompts.BUILDERS; the editor then opens empty.
+                "default_prompt": default_prompt(key),
+                "second_duty": SECONDARY_DUTIES.get(key),
+                "derived": sid == "retro-audit",
+            })
+    return {
+        "id": "retrospective",
+        "title": "Retrospective",
+        "subtitle": "The weekly review. It judges the process, not the "
+                    "P&L, has no trading authority, and ends in a ranked "
+                    "Improvement Backlog - the next flow version.",
+        "stages": stages_out,
+        "nodes": nodes,
+        "edges": [{"from": a, "to": b, "kind": "flow", "rounds": None}
+                  for a, b in RETRO_EDGES],
+    }
+
+
 def pipeline_spec():
     """Every flow the engine runs, plus the models an owner may pick.
 
-    Two flows today. `execution` appears in both by design: it is one
+    Three flows. `execution` appears in two by design: it is one
     seat that both flows hand an instruction to, so an override on it
     applies wherever it runs — duplicating it under a second id would
     promise a distinction the engine does not make.
     """
     return {
-        "flows": [_origination(), _management()],
+        "flows": [_origination(), _management(), _retrospective()],
         # The models an owner may pick from. A list, not a text box:
         # see alliela/overrides.py on why.
         "models": [{"id": m, "name": n, "note": note}

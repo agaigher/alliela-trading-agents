@@ -627,3 +627,33 @@ Resolve any merge conflicts as normal. Never push back to the TauricResearch for
   place when possible — it makes `git subtree pull` conflicts worse.
 - `.env` is gitignored. To rotate or add an API key: edit
   `trading-agents/.env` then re-run.
+
+## The Retrospective is a drawn flow (10 Oct 2026)
+
+`graph_spec.py` now carries a third flow, `_retrospective()`: four tiers,
+six seats — Scorekeeper → Attribution → the Process Audit panel (Prompt /
+Structure / Tooling auditors) → Head of Performance Review. It was the
+one flow with no spec, which made it the one that could not be drawn,
+edited per-agent, or watched while it ran.
+
+- **Each tier is its own STAGE string** (`Scorekeeping`, `Attribution`,
+  `Process Audit`, `Performance Review`), matching the spec's stage
+  titles exactly. The portal lays a run's documents out by stage title,
+  so a single `STAGE = "Retrospective"` would have put all seven documents
+  in one undrawn column. Same convention as daily.py's `STAGE_INTEL`
+  family.
+- **Every call passes `node=`**, so the lifecycle events fire and owner
+  overrides apply. This closes the last `ask_validated` site without a
+  node id.
+- **Documents are emitted as each is written**, not batched at the end.
+  The other flows emit per stage; the Retrospective used to hold all seven
+  (six agents; the Head writes two) until the Head finished, so a watched run would show nothing for
+  minutes and then everything at once.
+- **The tip now reaches it**, as a focus for the review ("why did every
+  thesis pass?"). It scopes what the Scorekeeper and auditors look at;
+  it is explicitly not a conclusion they are told to reach, since a
+  review handed its verdict is not a review.
+- The agents' prompts are still inline f-strings, not in
+  `prompts.BUILDERS`, so `default_prompt()` returns None for them and the
+  portal's editor opens empty rather than prefilled. Lifting them is the
+  same job already done for the other 14 prompts.
