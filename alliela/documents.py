@@ -11,9 +11,11 @@ from pydantic import BaseModel, Field
 
 
 class IdeaCandidate(BaseModel):
-    ticker: str = Field(description="Exchange ticker, e.g. '6501.T'")
+    ticker: str = Field(description="US ticker as Yahoo writes it, "
+                                    "e.g. 'ETN' or 'BRK-B'")
     name: str
-    direction: str = Field(description="'long' or 'short'")
+    direction: str = Field(description="Always 'long': the platform "
+                                       "is long only")
     one_liner: str = Field(description="The idea in one sentence")
     catalyst: str = Field(description="Dated or expected catalyst")
     edge_claim: str = Field(description="Why the market is wrong")
@@ -230,8 +232,9 @@ class Thesis(BaseModel):
     summary. The document the fund is named for."""
     ticker: str
     name: str
-    direction: Literal["long", "short", "pass"] = Field(
-        description="Exactly one of: 'long', 'short', 'pass'. Nuance "
+    direction: Literal["long", "pass"] = Field(
+        description="Exactly one of: 'long', 'pass'. The platform is "
+                    "long only, so a bearish verdict is a pass. Nuance "
                     "belongs in stance, never here.")
     stance: str = Field(description="One sentence of stance nuance — "
                                     "e.g. conditions for entry on a "
@@ -323,7 +326,7 @@ class TransactionProposal(BaseModel):
     paraphrase)."""
     ticker: str
     name: str
-    direction: Literal["long", "short"]
+    direction: Literal["long"]
     size_pct_nav: float = Field(description="Proposed total position, "
                                             "% of NAV")
     entry_plan: list[Tranche]
@@ -332,13 +335,8 @@ class TransactionProposal(BaseModel):
                     "the verified ADV number")
     stop: str = Field(description="Hard stop level + its basis")
     standing_orders: list[str]
-    short_borrow: str = Field(
-        description="Borrow-realism check. For shorts: borrowable at "
-                    "size per the Positioning report's data, borrow "
-                    "cost charged against expected P&L. For longs: "
-                    "'n/a — long' plus a one-line for-the-record note.")
-    expected_costs: str = Field(description="Slippage / borrow / "
-                                            "hedging cost estimate")
+    expected_costs: str = Field(description="Slippage / hedging cost "
+                                            "estimate")
     timeline: str = Field(description="Execution window and pacing")
     open_questions_for_risk: list[str] = Field(
         description="What the Risk panel should stress first")
@@ -363,8 +361,6 @@ class TransactionProposal(BaseModel):
             + "".join(f"<li>{_e(s)}</li>"
                       for s in self.standing_orders)
             + "</ul>"
-            + f"<p><strong>Borrow check:</strong> "
-              f"{_e(self.short_borrow)}</p>"
             + f"<p><strong>Expected costs:</strong> "
               f"{_e(self.expected_costs)}</p>"
             + f"<p><strong>Timeline:</strong> {_e(self.timeline)}</p>"
@@ -629,13 +625,11 @@ class MarketContextBrief(BaseModel):
 
 
 class DailyRiskReport(BaseModel):
-    """The three origination risk lenses re-checked daily, plus the
-    squeeze watch on shorts. One risk language with origination."""
+    """The three origination risk lenses re-checked daily. One risk
+    language with origination. The squeeze watch went with shorts."""
     liquidity: str
     concentration: str
     drawdown: str
-    squeeze_watch: str = Field(description="Days-to-cover / borrow "
-                                           "state on every short")
     breaches: list[str] = Field(description="Limits breached or "
                                             "approaching; empty is an "
                                             "acceptable answer")
@@ -647,8 +641,6 @@ class DailyRiskReport(BaseModel):
             f"<p><strong>Concentration.</strong> "
             f"{_e(self.concentration)}</p>"
             f"<p><strong>Drawdown.</strong> {_e(self.drawdown)}</p>"
-            f"<p><strong>Squeeze watch.</strong> "
-            f"{_e(self.squeeze_watch)}</p>"
             "<h4>Breaches</h4><ul>"
             + ("".join(f"<li>{_e(b)}</li>" for b in self.breaches)
                or "<li>none</li>") + "</ul>")
@@ -970,10 +962,9 @@ def compliance_record_html(checks, passed):
     return _doc(
         "<h3>Compliance Record</h3>"
         "<p><em>Deterministic rule check of the Dealing Instruction "
-        "against the mandate's typed restrictions and the book at "
-        "order release — no judgment, no waivers. N/E = not "
-        "mechanically evaluable yet; SOFT BREACH = a limit the mandate "
-        "declares advisory.</em></p>"
+        "against the platform rules, the mandate's typed restrictions "
+        "and the book at order release — no judgment, no waivers. "
+        "N/E = not mechanically evaluable yet.</em></p>"
         "<table><thead><tr><th>Rule</th><th>Observed</th>"
         "<th>Result</th></tr></thead>"
         f"<tbody>{rows}</tbody></table>"

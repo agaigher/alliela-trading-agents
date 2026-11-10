@@ -16,6 +16,7 @@ import json
 from alliela.documents import IdeaBrief, Scorecard
 from alliela.market import ticker_snapshot
 from alliela.structured import ask_validated
+from alliela.universe import RULE_TEXT, listing_check
 
 
 def _adv_floor(ctx):
@@ -44,9 +45,11 @@ LENSES = [
      "market data provided, not on the desks' claims. Fatal rules: a "
      "ticker whose verification status is 'not_found' is a fantasy "
      "name — always fatal; average daily value traded below the "
-     "mandate's {adv_floor} floor — fatal; venue outside the "
-     "mandate universe "
-     "— fatal. 'data_unavailable' is NEVER fatal: score conservatively "
+     "mandate's {adv_floor} floor — fatal; platform_eligible false "
+     "(not a NYSE/Nasdaq common stock) — always fatal; a short "
+     "direction — always fatal, the platform is long only; venue "
+     "outside the mandate universe — fatal. 'data_unavailable' is "
+     "NEVER fatal: score conservatively "
      "and flag the coverage gap. Also flag any name/ticker mismatch "
      "between a desk's claim and the verified name."),
     ("crowding", "Crowding Scorer", "crowding",
@@ -68,8 +71,8 @@ def lens_system_prompt(ctx, agent, lens, lens_rules):
         f"Committee. You judge EVERY candidate through exactly one "
         f"lens — {lens} — and nothing else.\n\nLens rules: "
         f"{lens_rules.format(adv_floor=_adv_floor(ctx))}"
-        f"\n\nThe mandate (universe, liquidity floor, "
-        f"shorting rules) binds:\n\n{ctx.mandate_text}\n\n"
+        f"\n\n{RULE_TEXT}\n\nThe mandate (universe, liquidity "
+        f"floor) binds within them:\n\n{ctx.mandate_text}\n\n"
         "Score every candidate 1-5 through your lens, mark fatal "
         "flags per your rules, keep rationales to two sentences. "
         "Return STRICT JSON only, matching this schema:\n"
@@ -87,9 +90,40 @@ def chair_system_prompt():
         "from: catalyst, rationale, what the analysts must verify "
         "first, and the ranked rejects with honest reasons. If no "
         "candidate survives, say so (viable=false) — a no-trade run "
-        "is a first-class outcome. Remember: edge scores are triage "
+        "is a first-class outcome. " + RULE_TEXT + " A pick that "
+        "breaks them is overridden in code. Remember: edge scores are "
+        "triage "
         "and expire downstream. Return STRICT JSON matching:\n"
         + json.dumps(IdeaBrief.model_json_schema(), indent=1))
+
+
+def _enforce_platform(brief, snapshots):
+    """The Chair's pick, checked in code against the platform universe.
+
+    The lenses are told the rule; this makes it binding. An ineligible
+    or short pick ends the run at Selection with the reason on the
+    brief, never a model's judgment that the rule could bend.
+    """
+    if not brief.viable:
+        return brief
+    why = None
+    if str(brief.direction).strip().lower() != "long":
+        why = (f"direction '{brief.direction}' — the platform is long "
+               "only")
+    else:
+        snap = next((s for s in snapshots
+                     if s.get("ticker") == brief.ticker), None)
+        ok, note = listing_check(snap or ticker_snapshot(brief.ticker))
+        if not ok:
+            why = note
+    if why is None:
+        return brief
+    return brief.model_copy(update={
+        "viable": False,
+        "coverage_notes": (f"Overridden by the platform rule: "
+                           f"{brief.ticker} — {why}. "
+                           + brief.coverage_notes),
+    })
 
 
 def run_selection(ctx, llm, combined):
@@ -99,6 +133,9 @@ def run_selection(ctx, llm, combined):
 
     # real verification pack — fetched deterministically, injected
     snapshots = [ticker_snapshot(c.ticker) for c in combined.candidates]
+    for snap in snapshots:
+        ok, note = listing_check(snap)
+        snap["platform_eligible"], snap["platform_note"] = ok, note
 
     def ask(agent, system, user, schema_cls, node=None):
         return ask_validated(
@@ -128,6 +165,7 @@ def run_selection(ctx, llm, combined):
             for key, agent, lens, _ in LENSES))
     brief = ask("Selection Chair", chair_system, chair_user,
                 IdeaBrief, node="chair")
+    brief = _enforce_platform(brief, snapshots)
 
     titles = {"conviction": "Edge Scorecard",
               "feasibility": "Feasibility Scorecard",

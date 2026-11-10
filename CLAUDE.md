@@ -657,3 +657,62 @@ edited per-agent, or watched while it ran.
   `prompts.BUILDERS`, so `default_prompt()` returns None for them and the
   portal's editor opens empty rather than prefilled. Lifting them is the
   same job already done for the other 14 prompts.
+
+## Platform universe: US-listed stocks, long only (decided 10 Nov 2026)
+
+Every fund on the platform, the house fund included, now trades **one
+market, one instrument, one direction**: US-listed common stock on
+**NYSE or Nasdaq**, **long only**. This is a platform rule, not a
+mandate setting, so no mandate can loosen it. ADRs count, because they
+are US-listed equity (TSM, ASML's US line). ETFs, funds, options,
+preferreds and every non-US listing do not.
+
+Why US: the engine's best evidence is US-only (EDGAR filings and
+sections, US options IV). RUN-0155 picked EOAN.DE and every filing tool
+answered `unavailable`. Why long only: no short ever reached a fill, and
+borrow realism, squeeze watch and the short limits were a lot of
+machinery for a direction the desk never used.
+
+**Enforced in code, not only in prompts** (`alliela/universe.py`):
+- **The listing check** is deterministic, built on Yahoo's chart meta,
+  which `ticker_snapshot` already fetches: `instrumentType == "EQUITY"`
+  and `exchangeName ∈ {NYQ (NYSE), NMS / NGM / NCM (Nasdaq tiers)}`. Each
+  snapshot carries `platform_eligible` plus a reason.
+- **Selection.** The feasibility lens treats ineligible as fatal. After
+  the Chair, the stage itself overrides the brief: a pick that is
+  ineligible, or not `long`, becomes `viable = False` with the reason
+  stated, so the run ends at Selection. A model cannot talk its way past
+  this step.
+- **Gate.** `check_instruction` adds two hard platform checks on every
+  entry leg: no sell-side entry, and a US ticker format
+  (`^[A-Z]{1,5}(-[A-Z])?$`, so a `.T`/`.DE` suffix fails).
+  `check_daily` fails any sell larger than the held long, because that
+  would open a short.
+- **Schemas.** `Thesis.direction ∈ {long, pass}` and
+  `TransactionProposal.direction = long`. `short_borrow` is gone.
+
+**Typed limits shrink to four, all hard.** These are
+`max_single_position_cost_pct`, `cash_floor_pct`, `max_positions` and
+`min_adv_usd`. The rest no longer apply:
+- Removed because there are no shorts: `max_gross_short_pct`,
+  `max_single_short_pct`, `shorting_permitted`.
+- Removed because they are redundant when long-only (gross = net =
+  100 − cash): `max_gross_exposure_pct`, `net_exposure_*`.
+- Removed because there is one market: `country_gross_caps`.
+- Removed with the soft/hard choice: `limit_types`. Every breach now
+  blocks.
+
+The daily-loop guardrails (`max_daily_turnover_pct`,
+`max_size_change_pct`) stay as fixed engine defaults that no mandate
+exposes. `from_dict` already ignores unknown keys, so older stored
+mandates still load.
+
+**Prompts** drop every short and non-US instruction. The desks propose
+US longs only. The Bear argues *against owning it*, not a short case.
+Risk loses its short-exit notes and Structuring its borrow check. The
+daily loop's squeeze watch is gone. Phase C's `defer` (above) still
+adds to `{long, pass}` when built; its "in the thesis's direction"
+shadow-tracking is now always long.
+
+Ships as **flow v7**, with the pipeline spec republished because node
+descriptions changed.

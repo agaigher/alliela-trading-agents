@@ -73,7 +73,7 @@ def _structure_description():
         f"round; pack-only citation rule) → 04 Thesis Desk: Bull/Bear "
         f"alternating for {ROUNDS} rounds ({ROUNDS * 2} turns, Bull "
         f"opens, BEAR ALWAYS CLOSES) → Research Manager judges "
-        f"(long/short/pass) → Pre-mortem → 05 Structuring (skipped on "
+        f"(long/pass; the platform is long only) → Pre-mortem → 05 Structuring (skipped on "
         f"pass) → 06 Risk panel (3 lenses sequential + Head of Risk) "
         f"→ 07 PM Decision/Funding/Instruction (one bounce round) → "
         f"08 deterministic Compliance gate → 09 Execution. A pass at "

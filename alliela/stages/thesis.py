@@ -33,8 +33,9 @@ def manager_system_prompt(fund_name="the fund"):
         "and decidable — when the date arrives, the named data source "
         "answers fired or not fired; 'sentiment deteriorates' is not a "
         "kill criterion. If the Bear won, say so: direction is "
-        "EXACTLY 'long', 'short', or 'pass' — a withheld or deferred "
-        "conviction is 'pass', and the conditions live in stance. "
+        "EXACTLY 'long' or 'pass'. The platform is long only, so a "
+        "bearish verdict is 'pass', and so is a withheld or deferred "
+        "conviction; the conditions live in stance. "
         "Return STRICT JSON only, matching:\n"
         + json.dumps(Thesis.model_json_schema(), indent=1))
 

@@ -208,7 +208,7 @@ def run_origination(ctx, llm):
         "position_context": ({
             "ticker": thesis.ticker,
             "name": thesis.name,
-            "direction": "L" if thesis.direction == "long" else "S",
+            "direction": "L",  # long only (alliela/universe.py)
             "stop": (constraints.mandatory_stops[0]
                      if constraints and constraints.mandatory_stops
                      else ""),

@@ -54,7 +54,7 @@ AUTHORED = {
     "thesis": [
         ("bull", "Bull", DEEP, "argues the long case from the frozen "
          "analyst evidence, three rounds, cite-or-concede"),
-        ("bear", "Bear", DEEP, "argues the short case on the same "
+        ("bear", "Bear", DEEP, "argues against owning it on the same "
          "evidence, three rounds"),
         ("research-manager", "Research Manager", DEEP, "judges the "
          "debate into a Thesis with dated, decidable kill criteria"),
@@ -64,7 +64,7 @@ AUTHORED = {
     "structuring": [
         ("structuring", "Trading Desk", DEEP, "turns a non-pass thesis "
          "into a Transaction Proposal: tranches, participation vs "
-         "verified ADV, stop, borrow-realism check"),
+         "verified ADV, stop, costs"),
     ],
     "pm": [
         ("pm-decision", "PM - Decision", PM, "addresses every signed "
@@ -232,7 +232,7 @@ DAILY_NODES = {
          "real snapshots, no per-name opinion"),
         ("risk-report", "Risk Report", QUICK,
          "origination's three risk lenses re-checked daily against the "
-         "live book, plus the squeeze watch on every short"),
+         "live book"),
         ("thesis-check", "Thesis Check", QUICK,
          "one position at a time: the dated kill criteria evaluated "
          "fired / approaching / not_fired - decidable, not vibes"),

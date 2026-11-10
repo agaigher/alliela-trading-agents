@@ -23,19 +23,16 @@ LENSES = [
      "exit capacity: how fast can the fund get OUT at size, in stress, "
      "when everyone else is exiting too? Judge entry pacing vs the "
      "verified ADV, exit horizon at stressed participation, and what "
-     "gaps or halts would do. For a short, remember the exit is a "
-     "BUY-BACK — liquidity risk is squeeze risk."),
+     "gaps or halts would do."),
     ("concentration", "Concentration Risk",
      "stacking against the book: what does this position add to "
      "exposures the fund already carries — country, sector, factor, "
-     "theme? Judge gross AND net. Name the overlapping positions from "
+     "theme? Name the overlapping positions from "
      "the book explicitly and quantify the stacked exposure."),
     ("drawdown", "Drawdown Risk",
      "loss under stress: what does the book's P&L look like if this "
      "thesis is wrong, the stop gaps, or the catalyst breaks the wrong "
-     "way? Size the plausible worst case in NAV terms. For a short, "
-     "the loss is unbounded — stress days-to-cover and squeeze "
-     "dynamics."),
+     "way? Size the plausible worst case in NAV terms."),
 ]
 
 TITLES = {"liquidity": "Liquidity View",

@@ -11,12 +11,13 @@ import json
 from alliela.documents import CombinedIdeasBook, IdeaBook, RevisionNote
 from alliela.market import context_pack
 from alliela.structured import ask_validated
+from alliela.universe import RULE_TEXT
 
 DESKS = [
     ("macro", "Macro Desk",
      "top-down: rates, policy, FX, commodity and supply-chain shifts "
      "that reprice whole groups of names. Work from the macro layer "
-     "down to specific listed beneficiaries and casualties."),
+     "down to the specific US-listed names that benefit."),
     ("thematic", "Thematic Desk",
      "structural: multi-year adoption curves, regulation, technology "
      "cost curves. Find names whose exposure to the theme the market "
@@ -44,10 +45,13 @@ def desk_system_prompt(desk_name, lens, mandate, tip, fund_name):
     return (
         f"You are the {desk_name} of {fund_name}'s Idea Generation "
         f"tier — {lens}\n\n{tipline}\n\n"
-        "The fund mandate binds everything you propose (universe, "
-        "liquidity floor, shorting rules):\n\n" + mandate + "\n\n"
-        "Rules of the desk: propose 2-3 candidates, long or short "
-        "(direction is a field, not a fork). Every evidence bullet "
+        + RULE_TEXT + "\n\n"
+        "The fund mandate binds everything you propose within them "
+        "(universe, liquidity floor):\n\n" + mandate + "\n\n"
+        "Rules of the desk: propose 2-3 candidates, every one a LONG "
+        "in a NYSE- or Nasdaq-listed common stock, ticker as Yahoo "
+        "writes it (ETN, BRK-B: no exchange suffix). Every evidence "
+        "bullet "
         "must name its source. Claim only edges you can articulate — "
         "'why is the market wrong' beats 'this is a good company'. "
         "Respect the universe and the $8M ADV liquidity floor; note "
@@ -61,7 +65,8 @@ def head_review_system_prompt():
         "You are the Head of Idea Generation. You do NOT pick winners "
         "— selection is the Selection Committee's job. You review each "
         "desk's book for: evidence discipline (every claim sourced), "
-        "mandate fit (universe, liquidity, shorting rules), edge "
+        "mandate fit (universe, liquidity, and the platform rules: "
+        "US NYSE/Nasdaq common stock, long only), edge "
         "clarity, and overlap across desks. Return STRICT JSON: a list "
         "of three objects matching this schema:\n"
         + json.dumps(RevisionNote.model_json_schema(), indent=1))

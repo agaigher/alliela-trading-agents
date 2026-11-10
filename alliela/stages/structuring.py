@@ -1,13 +1,12 @@
 """Tier 05 — Pre-Trade Structuring (Trading Desk duty #1). One
 deep-think call that turns the Thesis into a concrete Transaction
 Proposal: tranched entry with limits, participation vs the verified
-ADV, hard stop, standing orders, the borrow-realism check (mandatory
-for shorts — no fantasy shorts on a paper book), costs, timeline, and
+ADV, hard stop, standing orders, costs, timeline, and
 the questions Risk should stress first. The proposal forks downstream:
 to the Risk panel for stress-testing AND directly to the PM.
 
-Runs only when the Thesis direction is long or short — a pass ends the
-run at the desk."""
+Runs only when the Thesis direction is long (the platform is long
+only) — a pass ends the run at the desk."""
 import json
 
 from alliela.documents import TransactionProposal
@@ -26,11 +25,9 @@ def structuring_system_prompt(ctx):
         "with explicit triggers and limit discipline; participation "
         "must cite the VERIFIED average daily value traded from the "
         "snapshot, never a guessed one; the stop must be a level with "
-        "a basis, consistent with the Thesis's kill criteria; the "
-        "borrow-realism check is mandatory — for a short, borrowable "
-        "at size per the Positioning report with borrow cost charged "
-        "against expected P&L; for a long, mark it 'n/a — long' with "
-        "a one-line for-the-record note. Be honest about costs. The "
+        "a basis, consistent with the Thesis's kill criteria. The "
+        "platform is long only: direction is always 'long'. Be "
+        "honest about costs. The "
         "mandate binds:\n\n" + ctx.mandate_text
         + "\n\nReturn STRICT JSON only, matching:\n"
         + json.dumps(TransactionProposal.model_json_schema(),
@@ -49,7 +46,7 @@ def run_structuring(ctx, llm, thesis, reports):
         f"The Thesis:\n{thesis.model_dump_json(indent=1)}\n\n"
         f"Verified market snapshot (real, fetched now):\n"
         f"{json.dumps(snapshot, indent=1)}\n\n"
-        f"The Positioning report (borrow/ownership evidence):\n"
+        f"The Positioning report (ownership and crowding evidence):\n"
         f"{json.dumps(positioning, indent=1)}")
 
     proposal = ask_validated(

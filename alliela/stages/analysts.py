@@ -33,10 +33,10 @@ ANALYSTS = [
      "What is the market already saying about this name?"),
     ("sentiment", "Positioning Analyst",
      "who owns it and who is against it: institutional/insider "
-     "holdings, short interest and borrow, sell-side stance and "
-     "targets. Your report verifies (or contradicts) the Selection "
-     "Committee's crowding read with data; your borrow findings feed "
-     "Pre-Trade Structuring's borrow-realism check downstream."),
+     "holdings, short interest (a crowding signal: the fund itself "
+     "never shorts), sell-side stance and targets. Your report "
+     "verifies (or contradicts) the Selection Committee's crowding "
+     "read with data."),
     ("news", "News Analyst",
      "the catalyst record and the narrative: what has actually been "
      "announced or reported, dated; how the story the desks told "
@@ -87,11 +87,9 @@ def analyst_system_prompt(name, lens, mandate, fund_name):
         "pass. Spend them on the numbers the thesis actually turns on "
         "— the brief's coverage notes say which — not on what the pack "
         "already holds. A tool that answers 'unavailable' or 'blocked' "
-        "is a fact to record, not a reason to guess — and the EDGAR "
-        "tools cover US filers only: a non-US primary listing (an "
-        "exchange suffix like .DE, .T, .L) gets 'unavailable' from all "
-        "of them, so record that gap once and spend the rest on news, "
-        "article text and prices.\n"
+        "is a fact to record, not a reason to guess. The platform "
+        "trades US-listed stock only, so the EDGAR tools apply; an ADR "
+        "of a foreign issuer files a 20-F/6-K, not a 10-K/10-Q.\n"
         "Two to four sections of tight prose, a summary table, honest "
         "gaps. The mandate for context:\n\n" + mandate
         + "\n\nReturn STRICT JSON only, matching this schema:\n"

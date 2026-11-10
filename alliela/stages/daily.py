@@ -48,8 +48,8 @@ def risk_report_system_prompt():
     return (
         "You are the Daily Risk Report duty — the three origination "
         "risk lenses re-checked daily (liquidity, concentration, "
-        "drawdown; one risk language with origination) plus the "
-        "squeeze watch on every short. Judge from the book and the "
+        "drawdown; one risk language with origination). The book is "
+        "long only. Judge from the book and the "
         "real snapshots; name numbers. " + HONESTY
         + " Return STRICT JSON matching:\n"
         + json.dumps(DailyRiskReport.model_json_schema(), indent=1))

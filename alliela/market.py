@@ -97,6 +97,9 @@ def ticker_snapshot(ticker):
         "currency": meta.get("currency") or "",
         "price": meta.get("regularMarketPrice"),
         "adv_value_usd": adv_usd,
+        # What the platform-universe check reads (alliela/universe.py)
+        "exchange_code": meta.get("exchangeName") or "",
+        "instrument_type": meta.get("instrumentType") or "",
     }
 
 
