@@ -110,10 +110,52 @@ DERIVED = {
 }
 
 
+# Origination as four runnable steps (alliela/steps.py). Each step's
+# sub-graph is its stages; the intake stage runs only when the step
+# starts from the owner's text rather than from a previous run.
+INTAKE = {
+    "research": ("intake-research", "Research Intake", "analysts",
+                 "turns the owner's text into an Idea Brief, with "
+                 "suggested values where the text is silent"),
+    "risk": ("intake-risk", "Risk Intake", "risk",
+             "turns the owner's text into a Thesis and Transaction "
+             "Proposal for the Risk panel"),
+    "pm": ("intake-pm", "PM Intake", "pm",
+           "turns the owner's text into Thesis, Proposal and Risk "
+           "Constraints for the PM"),
+}
+ORIGINATION_STEPS = [
+    ("ideas", "Idea Generation", "orig_ideas", ["ideagen", "selection"]),
+    ("research", "Research", "orig_research",
+     ["intake-research", "analysts", "thesis", "structuring"]),
+    ("risk", "Risk Panel", "orig_risk", ["intake-risk", "risk"]),
+    ("pm", "Portfolio Manager", "orig_pm",
+     ["intake-pm", "pm", "compliance", "execution"]),
+]
+_INTAKE_INTO = {"intake-research": ["market", "sentiment", "news",
+                                    "fundamentals"],
+                "intake-risk": ["liquidity", "concentration",
+                                "drawdown"],
+                "intake-pm": ["pm-decision"]}
+
+
 def _origination():
     """{stages, nodes, edges} for the origination flow."""
     nodes, stages_out = [], []
+    before = {v[2]: (k, v) for k, v in INTAKE.items()}
     for tier, sid, title in STAGES:
+        if sid in before:
+            _step, (nid, ititle, _into, brief) = before[sid]
+            stages_out.append({"id": nid, "tier": "in", "title": ititle,
+                               "nodes": [nid]})
+            nodes.append({
+                "id": nid, "stage": nid, "stage_title": ititle,
+                "name": "Intake desk", "model_tier": QUICK,
+                "brief": brief, "default_model": TIER_MODEL[QUICK],
+                "default_prompt": default_prompt(nid),
+                "second_duty": None, "derived": False,
+                "intake": True,
+            })
         members = list(DERIVED.get(sid, [])) + list(AUTHORED.get(sid, []))
         if sid in LEADS:
             members.append(LEADS[sid])
@@ -171,7 +213,7 @@ def _origination():
         ("pm-funding", "pm-instruction"),
         ("pm-instruction", "compliance"),
         ("compliance", "execution"),
-    ]]
+    ]] + [(i, d, "flow") for i, ds in _INTAKE_INTO.items() for d in ds]
 
     # Loops the straight line hides. rounds=None means "as many times as
     # it fails" — a compliance breach returns a new decision, not a
@@ -203,6 +245,11 @@ def _origination():
         "stages": stages_out,
         "nodes": nodes,
         "edges": edges,
+        "steps": [{"id": sid, "title": title, "run_type": rt,
+                   "stages": st,
+                   "stage_titles": [x["title"] for x in stages_out
+                                    if x["id"] in st]}
+                  for sid, title, rt, st in ORIGINATION_STEPS],
     }
 
 

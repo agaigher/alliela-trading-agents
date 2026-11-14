@@ -729,3 +729,51 @@ owns the stop. `position_context` carries it, and the worker stores it on
 Positions opened before this have **no target**, and the portal shows
 "—" for them. Nothing backfills one, because a consensus figure or a
 derived one would print a view that no agent of ours took.
+
+## Origination in four steps (decided 14 Nov 2026, flow v9)
+
+Origination can now run as **four independent steps**, each its own run.
+Each step stops at its own boundary, and the next step starts from a
+previous run or from the owner's text:
+
+| Step (`run_type`) | Stages | Hands on |
+|---|---|---|
+| `orig_ideas` | Idea Generation → Selection | Idea Brief (`chair`) |
+| `orig_research` | [Research Intake] → Analysts → Thesis Desk → Structuring | Thesis (`research-manager`), Proposal (`trader`) |
+| `orig_risk` | [Risk Intake] → Risk Panel | Risk Constraints (`head-risk`) |
+| `orig_pm` | [PM Intake] → PM → Compliance → Execution | fills |
+
+Compliance runs in the PM step because it checks the PM's Dealing
+Instruction. It cannot run before there is one. The PM's escalation to
+the Head of Risk still happens inside the PM step.
+
+- **`alliela/steps.py`** holds `run_step(ctx, llm, step, inputs, text,
+  structured)`. It reuses the stage functions unchanged and returns the
+  usual rollup plus `continue` (whether a next step makes sense) and
+  `ticker`. `run_origination` stays as it was, for the legacy full
+  runs.
+- **Inputs are rebuilt from documents.** Every hand-off document
+  already stores its typed payload in `meta.structured`. The worker
+  gathers those across the source run and its ancestors (nearest
+  first) and passes them in. The engine still never reads a database.
+  Old full runs therefore work as a source too.
+- **Text input** (`stages/intake.py`, nodes `intake-research`,
+  `intake-risk`, `intake-pm`). First a quick call identifies the
+  ticker, then a verified snapshot, then the US-listed check from
+  `universe.py`. An ineligible name ends the step before any expensive
+  call. Then one of two modes:
+  - **Structured**: one call converts the text into the documents the
+    step needs. A field the text does not give is filled with a
+    **suggested value**, listed in `suggested` with its basis and shown
+    as SUGGESTED in the intake document. The converted documents are
+    also emitted under their standard keys (`chair`, `research-manager`,
+    `trader`, `head-risk`), so a later step can chain from them.
+  - **As written**: no conversion. Stages get the text verbatim
+    (`RawDoc`) where they would read the typed document. In the PM step
+    the gate then has no Risk Constraints, so the constraint-cap and
+    mandatory-stop checks report **not evaluable** (`check_instruction`
+    accepts `constraints=None`). Mandate limits and platform rules are
+    still checked.
+- `graph_spec` adds the three intake stages and an origination `steps`
+  list (id, title, run_type, stage ids). The portal draws one sub-graph
+  per step from it.

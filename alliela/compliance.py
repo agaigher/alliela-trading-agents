@@ -105,13 +105,19 @@ def check_instruction(instruction, decision, constraints, book,
     add("Platform: US-listed stock (NYSE/Nasdaq)",
         f"non-US tickers: {foreign or 'none'}", not foreign)
 
-    # 1. Risk cap — the signed constraint binds
-    cap = constraints.max_position_pct_nav
+    # 1. Risk cap — the signed constraint binds. With no typed
+    #    constraints (an owner's as-written text started this step) the
+    #    rule is reported not evaluable, never passed.
     existing = sum(weights.get(l.ticker, 0.0) for l in entry_legs)
-    add(f"RiskConstraints position cap ≤ {cap:g}% NAV",
-        f"entry {entry_size:g}% + existing {existing:g}% = "
-        f"{entry_size + existing:g}%",
-        entry_size + abs(existing) <= cap + 1e-9)
+    if constraints is not None:
+        cap = constraints.max_position_pct_nav
+        add(f"RiskConstraints position cap ≤ {cap:g}% NAV",
+            f"entry {entry_size:g}% + existing {existing:g}% = "
+            f"{entry_size + existing:g}%",
+            entry_size + abs(existing) <= cap + 1e-9)
+    else:
+        add("RiskConstraints position cap",
+            "no typed Risk Constraints supplied", None)
 
     # 2. Mandate single-position cap at cost
     add(f"Mandate max single position ≤ "
@@ -141,12 +147,17 @@ def check_instruction(instruction, decision, constraints, book,
         len(held) <= r.max_positions)
 
     # 5. Stops present when constraints demand them
-    add("Mandatory stops placed",
-        f"{len(instruction.stops_to_place)} stop(s) in instruction vs "
-        f"{len(constraints.mandatory_stops)} required",
-        len(instruction.stops_to_place) >=
-        len(constraints.mandatory_stops) > 0
-        or len(constraints.mandatory_stops) == 0)
+    if constraints is not None:
+        add("Mandatory stops placed",
+            f"{len(instruction.stops_to_place)} stop(s) in instruction "
+            f"vs {len(constraints.mandatory_stops)} required",
+            len(instruction.stops_to_place) >=
+            len(constraints.mandatory_stops) > 0
+            or len(constraints.mandatory_stops) == 0)
+    else:
+        add("Mandatory stops placed",
+            f"{len(instruction.stops_to_place)} stop(s) in instruction; "
+            "no typed Risk Constraints to check against", None)
 
     # 6. Not mechanically evaluable yet — reported, not skipped
     add("Top-5 concentration ≤ 65% at market", "needs marked prices",

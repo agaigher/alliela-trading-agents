@@ -18,7 +18,7 @@ mandate baked in would freeze a copy of it — they would edit the
 mandate later and the agent would carry on reading the old one.
 """
 from alliela.stages import analysts, daily, execution, ideagen, pm, risk
-from alliela.stages import selection, structuring, thesis
+from alliela.stages import intake, selection, structuring, thesis
 
 # Placeholders, not values: see the module docstring.
 FUND = "{fund_name}"
@@ -94,6 +94,9 @@ BUILDERS = {
     "pm-funding": pm.funding_system_prompt,
     "pm-instruction": lambda ctx: pm.instruction_system_prompt(),
     "execution": execution.execution_system_prompt,
+    "intake-research": lambda ctx: intake.intake_system_prompt("research"),
+    "intake-risk": lambda ctx: intake.intake_system_prompt("risk"),
+    "intake-pm": lambda ctx: intake.intake_system_prompt("pm"),
 
     # The management flow (daily.py). Its duties take no run-time
     # values in the system prompt — the book, the snapshots and the
