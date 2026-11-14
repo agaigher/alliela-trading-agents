@@ -36,6 +36,9 @@ def manager_system_prompt(fund_name="the fund"):
         "EXACTLY 'long' or 'pass'. The platform is long only, so a "
         "bearish verdict is 'pass', and so is a withheld or deferred "
         "conviction; the conditions live in stance. "
+        "On a long, state target_price: the price the thesis expects "
+        "within the timeframe in path, with its basis in path; null "
+        "on a pass. "
         "Return STRICT JSON only, matching:\n"
         + json.dumps(Thesis.model_json_schema(), indent=1))
 

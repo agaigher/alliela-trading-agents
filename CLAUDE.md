@@ -716,3 +716,16 @@ shadow-tracking is now always long.
 
 Ships as **flow v7**, with the pipeline spec republished because node
 descriptions changed.
+
+## The Thesis states a target price (decided 14 Nov 2026)
+
+`Thesis.target_price` (float, listing currency, nullable) is the price
+the thesis expects within the timeframe in `path`. It is null on a pass,
+because there is no position to aim. It sits beside the kill criteria
+because it is the thesis's claim, not a trading level. Structuring still
+owns the stop. `position_context` carries it, and the worker stores it on
+`positions.target_price` when the entry fills.
+
+Positions opened before this have **no target**, and the portal shows
+"—" for them. Nothing backfills one, because a consensus figure or a
+derived one would print a view that no agent of ours took.

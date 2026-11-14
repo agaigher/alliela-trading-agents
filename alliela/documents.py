@@ -246,6 +246,12 @@ class Thesis(BaseModel):
     thesis: str = Field(description="The core argument, in prose")
     path: str = Field(description="Expected path: target, timeframe, "
                                   "what has to happen")
+    target_price: float | None = Field(
+        default=None,
+        description="On a long: the price, in the listing currency, "
+                    "that the thesis expects within the timeframe in "
+                    "path, with its basis stated in path. Null on a "
+                    "pass — there is no position to aim.")
     kill_criteria: list[KillCriterion]
     strategic_actions: list[str] = Field(
         description="Concrete next steps for Pre-Trade Structuring")
@@ -264,7 +270,9 @@ class Thesis(BaseModel):
             f"<p><strong>Verdict.</strong> {_e(self.verdict)}</p>"
             f"<p>{_e(self.thesis)}</p>"
             f"<p><strong>Path.</strong> {_e(self.path)}</p>"
-            "<h4>Kill criteria — dated, decidable</h4>"
+            + (f"<p><strong>Target.</strong> {self.target_price:g}</p>"
+               if self.target_price is not None else "")
+            + "<h4>Kill criteria — dated, decidable</h4>"
             "<table><thead><tr><th>Date</th><th>Criterion</th>"
             "<th>Decided by</th></tr></thead>"
             f"<tbody>{kc}</tbody></table>"

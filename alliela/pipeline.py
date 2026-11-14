@@ -212,6 +212,7 @@ def run_origination(ctx, llm):
             "stop": (constraints.mandatory_stops[0]
                      if constraints and constraints.mandatory_stops
                      else ""),
+            "target": thesis.target_price,
             "kill_note": (f"0 fired · next "
                           f"{thesis.kill_criteria[0].date}"
                           if thesis.kill_criteria else ""),
